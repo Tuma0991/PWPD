@@ -169,6 +169,14 @@ class _MapScreenState extends State<MapScreen> {
                                         fontSize: 12,
                                         color: AppTheme.textSecondary),
                                   ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    data.lastSeenLabel,
+                                    style: const TextStyle(
+                                      fontSize: 11,
+                                      color: AppTheme.textSecondary,
+                                    ),
+                                  ),
                                 ],
                               ),
                             ),

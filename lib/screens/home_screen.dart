@@ -117,12 +117,42 @@ class _DashboardTab extends StatelessWidget {
           IconButton(
             icon: const Icon(Icons.logout_outlined),
             onPressed: () async {
-              await firebase.signOut();
-              if (context.mounted) {
-                Navigator.pushReplacement(
-                  context,
-                  MaterialPageRoute(builder: (_) => const AuthScreen()),
-                );
+              final shouldLogout = await showDialog<bool>(
+                context: context,
+                builder: (context) => AlertDialog(
+                  title: const Text('Log out'),
+                  content: const Text('Are you sure you want to log out?'),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context, false),
+                      child: const Text('Cancel'),
+                    ),
+                    ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppTheme.danger,
+                      ),
+                      onPressed: () => Navigator.pop(context, true),
+                      child: const Text('Log out'),
+                    ),
+                  ],
+                ),
+              );
+
+              if (shouldLogout != true) return;
+
+              try {
+                await firebase.signOut();
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Logged out successfully')),
+                  );
+                }
+              } catch (e) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Logout failed: ${e.toString()}')),
+                  );
+                }
               }
             },
           )
@@ -203,6 +233,14 @@ class _DashboardTab extends StatelessWidget {
                                   ? AppTheme.success
                                   : AppTheme.textSecondary,
                               fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            data?.lastSeenLabel ?? 'Last seen unknown',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: AppTheme.textSecondary.withOpacity(0.8),
                             ),
                           ),
                         ],

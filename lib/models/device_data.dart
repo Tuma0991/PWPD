@@ -1,6 +1,15 @@
 // lib/models/device_data.dart
 
 class DeviceData {
+  /// Number of seconds after the last device update before we consider it offline.
+  ///
+  /// Adjust this value to change how aggressively the app marks a device offline.
+  /// For example:
+  /// - 30 seconds for very strict live status
+  /// - 120 seconds for a more tolerant connection indicator
+  /// - 300 seconds for slower update intervals
+  static const int onlineStaleThresholdSeconds = 120;
+
   final double latitude;
   final double longitude;
   final double accelX;
@@ -8,7 +17,7 @@ class DeviceData {
   final double accelZ;
   final bool fallDetected;
   final int timestamp;
-  final bool deviceOnline;
+  final bool rawOnline;
 
   DeviceData({
     required this.latitude,
@@ -18,8 +27,39 @@ class DeviceData {
     required this.accelZ,
     required this.fallDetected,
     required this.timestamp,
-    required this.deviceOnline,
+    required this.rawOnline,
   });
+
+  /// The app now considers the device online only when the device is reporting
+  /// online and the last timestamp is recent enough.
+  bool get deviceOnline {
+    if (!rawOnline) return false;
+    if (timestamp <= 0) return false;
+    final ageMillis = DateTime.now().millisecondsSinceEpoch - timestamp;
+    return ageMillis <= onlineStaleThresholdSeconds * 1000;
+  }
+
+  bool get isOnlineStale {
+    if (timestamp <= 0) return true;
+    final ageMillis = DateTime.now().millisecondsSinceEpoch - timestamp;
+    return ageMillis > onlineStaleThresholdSeconds * 1000;
+  }
+
+  int get ageMillis {
+    if (timestamp <= 0) return 0;
+    return DateTime.now().millisecondsSinceEpoch - timestamp;
+  }
+
+  Duration get age => Duration(milliseconds: ageMillis);
+
+  String get lastSeenLabel {
+    if (timestamp <= 0) return 'Last seen unknown';
+    if (age.inSeconds < 10) return 'Last seen just now';
+    if (age.inMinutes < 1) return 'Last seen ${age.inSeconds}s ago';
+    if (age.inHours < 1) return 'Last seen ${age.inMinutes}m ago';
+    if (age.inDays < 1) return 'Last seen ${age.inHours}h ago';
+    return 'Last seen ${age.inDays}d ago';
+  }
 
   factory DeviceData.fromMap(Map<String, dynamic> map) {
     final gps = Map<String, dynamic>.from(map['gps'] ?? {});
@@ -32,7 +72,7 @@ class DeviceData {
       accelZ: (accel['z'] ?? 0.0).toDouble(),
       fallDetected: map['fallDetected'] ?? false,
       timestamp: map['timestamp'] ?? 0,
-      deviceOnline: map['online'] ?? false,
+      rawOnline: map['online'] ?? false,
     );
   }
 
@@ -48,7 +88,7 @@ class DeviceData {
     double? accelZ,
     bool? fallDetected,
     int? timestamp,
-    bool? deviceOnline,
+    bool? rawOnline,
   }) {
     return DeviceData(
       latitude: latitude ?? this.latitude,
@@ -58,7 +98,7 @@ class DeviceData {
       accelZ: accelZ ?? this.accelZ,
       fallDetected: fallDetected ?? this.fallDetected,
       timestamp: timestamp ?? this.timestamp,
-      deviceOnline: deviceOnline ?? this.deviceOnline,
+      rawOnline: rawOnline ?? this.rawOnline,
     );
   }
 }

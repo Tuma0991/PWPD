@@ -1,54 +1,79 @@
 // lib/screens/alerts_screen.dart
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../services/firebase_service.dart';
 import '../theme.dart';
 
-class AlertsScreen extends StatelessWidget {
+class AlertsScreen extends StatefulWidget {
   final String deviceId;
   const AlertsScreen({super.key, required this.deviceId});
 
   @override
+  State<AlertsScreen> createState() => _AlertsScreenState();
+}
+
+class _AlertsScreenState extends State<AlertsScreen> {
+  final FirebaseService _firebase = FirebaseService();
+  StreamSubscription<Map<String, dynamic>>? _emergencySubscription;
+  bool _previousEmergencyActive = false;
+  String _previousEmergencyReason = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _subscribeToEmergencyEvents();
+  }
+
+  @override
+  void dispose() {
+    _emergencySubscription?.cancel();
+    super.dispose();
+  }
+
+  void _subscribeToEmergencyEvents() {
+    _emergencySubscription =
+        _firebase.listenToEmergencyAlert(widget.deviceId).listen((event) async {
+      final isEmergencyActive = event['active'] == true;
+      final emergencyReason = event['reason'] as String? ?? '';
+      final userId = _firebase.currentUser?.uid;
+
+      if (!mounted) return;
+
+      final isNewEmergency = isEmergencyActive &&
+          (!_previousEmergencyActive || emergencyReason != _previousEmergencyReason);
+
+      _previousEmergencyActive = isEmergencyActive;
+      _previousEmergencyReason = emergencyReason;
+
+      if (!isNewEmergency || userId == null || userId.isEmpty) return;
+
+      final isSOSButton = emergencyReason.contains('SOS button');
+      await _firebase.logAlert(userId, {
+        'type': isSOSButton ? 'sos' : 'fall',
+        'message': isSOSButton
+            ? 'Emergency SOS button pressed'
+            : 'Fall detected by ESP32 device',
+        'deviceId': widget.deviceId,
+        'reason': emergencyReason,
+      });
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final firebase = FirebaseService();
-    final userId = firebase.currentUser?.uid ?? '';
+    final userId = _firebase.currentUser?.uid ?? '';
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('Alert History'),
-        actions: [
-          // Listen to live emergency and log it
-          StreamBuilder<Map<String, dynamic>>(
-            stream: firebase.listenToEmergencyAlert(deviceId),
-            builder: (context, snap) {
-              final emergencyData = snap.data ?? {};
-              final isEmergencyActive = emergencyData['active'] == true;
-              final emergencyReason = emergencyData['reason'] as String? ?? '';
-              
-              if (isEmergencyActive && userId.isNotEmpty) {
-                // Auto log to Firestore with appropriate type
-                final isSOSButton = emergencyReason.contains('SOS button');
-                WidgetsBinding.instance.addPostFrameCallback((_) {
-                  firebase.logAlert(userId, {
-                    'type': isSOSButton ? 'sos' : 'fall',
-                    'message': isSOSButton 
-                        ? 'Emergency SOS button pressed'
-                        : 'Fall detected by ESP32 device',
-                    'deviceId': deviceId,
-                    'reason': emergencyReason,
-                  });
-                });
-              }
-              return const SizedBox.shrink();
-            },
-          ),
-        ],
       ),
       body: userId.isEmpty
           ? const Center(child: Text('Please log in'))
           : StreamBuilder<List<Map<String, dynamic>>>(
-              stream: firebase.getAlertHistory(userId),
+              stream: _firebase.getAlertHistory(userId),
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return const Center(child: CircularProgressIndicator());
