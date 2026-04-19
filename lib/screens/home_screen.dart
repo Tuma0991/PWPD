@@ -8,6 +8,7 @@ import 'map_screen.dart';
 import 'fall_detection_screen.dart';
 import 'alerts_screen.dart';
 import 'contacts_screen.dart';
+import 'geofence_screen.dart';
 import 'auth_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -29,11 +30,15 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final firebase = FirebaseService();
+    final userId = firebase.currentUser?.uid ?? '';
+    
     final screens = [
       _DashboardTab(deviceId: _deviceId),
       MapScreen(deviceId: _deviceId),
       FallDetectionScreen(deviceId: _deviceId),
       AlertsScreen(deviceId: _deviceId),
+      GeofenceScreen(userId: userId, deviceId: _deviceId),
       const ContactsScreen(),
     ];
 
@@ -75,6 +80,11 @@ class _HomeScreenState extends State<HomeScreen> {
               icon: Icon(Icons.notifications_outlined),
               activeIcon: Icon(Icons.notifications),
               label: 'Alerts',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.location_on_outlined),
+              activeIcon: Icon(Icons.location_on),
+              label: 'Geofences',
             ),
             BottomNavigationBarItem(
               icon: Icon(Icons.contacts_outlined),

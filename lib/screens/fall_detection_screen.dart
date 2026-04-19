@@ -67,7 +67,7 @@ class FallDetectionScreen extends StatelessWidget {
                     Text(
                       isFall 
                           ? (isSOSButton ? '🚨 SOS ALERT!' : '⚠️ FALL DETECTED!')
-                          : '✅ Normal Activity',
+                          : 'Normal Activity',
                       style: const TextStyle(
                         color: Colors.white,
                         fontSize: 22,

@@ -5,6 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/device_data.dart';
 import '../models/contact_model.dart';
+import '../models/geofence_model.dart';
 
 class FirebaseService {
   static final FirebaseService _instance = FirebaseService._internal();
@@ -146,5 +147,96 @@ class FirebaseService {
         .collection('contacts')
         .doc(contactId)
         .delete();
+  }
+
+  // ─── GEOFENCES ─────────────────────────────────────────────────────────────
+
+  /// Get all geofences for a user
+  Stream<List<GeofenceModel>> getGeofences(String userId) {
+    return _firestore
+        .collection('users')
+        .doc(userId)
+        .collection('geofences')
+        .snapshots()
+        .map((snap) =>
+            snap.docs.map((d) => GeofenceModel.fromMap(d.id, d.data())).toList());
+  }
+
+  /// Add a new geofence
+  Future<String> addGeofence(String userId, GeofenceModel geofence) async {
+    final docRef = await _firestore
+        .collection('users')
+        .doc(userId)
+        .collection('geofences')
+        .add(geofence.toMap());
+    return docRef.id;
+  }
+
+  /// Update an existing geofence
+  Future<void> updateGeofence(
+      String userId, String geofenceId, GeofenceModel geofence) async {
+    await _firestore
+        .collection('users')
+        .doc(userId)
+        .collection('geofences')
+        .doc(geofenceId)
+        .update({
+      ...geofence.toMap(),
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+  }
+
+  /// Delete a geofence
+  Future<void> deleteGeofence(String userId, String geofenceId) async {
+    await _firestore
+        .collection('users')
+        .doc(userId)
+        .collection('geofences')
+        .doc(geofenceId)
+        .delete();
+  }
+
+  /// Get geofence violations for a user
+  Stream<List<Map<String, dynamic>>> getGeofenceViolations(String userId) {
+    return _firestore
+        .collection('users')
+        .doc(userId)
+        .collection('geofence_violations')
+        .orderBy('timestamp', descending: true)
+        .limit(50)
+        .snapshots()
+        .map((snap) => snap.docs.map((d) => d.data()).toList());
+  }
+
+  /// Log a geofence violation
+  Future<void> logGeofenceViolation(
+      String userId, Map<String, dynamic> violationData) async {
+    await _firestore
+        .collection('users')
+        .doc(userId)
+        .collection('geofence_violations')
+        .add({
+      ...violationData,
+      'timestamp': FieldValue.serverTimestamp(),
+    });
+  }
+
+  /// Sync geofences to ESP32 device
+  Future<void> syncGeofencesToDevice(
+      String deviceId, List<GeofenceModel> geofences) async {
+    final geofenceList = geofences
+        .where((g) => g.enabled)
+        .map((g) => {
+              'id': g.id,
+              'name': g.name,
+              'lat': g.latitude,
+              'lng': g.longitude,
+              'radius': g.radiusMeters,
+            })
+        .toList();
+
+    await _rtdb
+        .ref('devices/$deviceId/geofences')
+        .set(geofenceList);
   }
 }

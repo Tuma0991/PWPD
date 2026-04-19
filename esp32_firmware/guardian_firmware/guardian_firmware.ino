@@ -44,8 +44,21 @@
 #define FALL_ACCEL_THRESHOLD   2.5   // in g-force units
 #define FALL_COOLDOWN_MS       5000  // 5 seconds before re-detecting
 
+// ─── Geofence Config ──────────────────────────────────────────────────────────
+#define GEOFENCE_CHECK_INTERVAL_MS 30000  // Check geofences every 30 seconds
+#define MAX_GEOFENCES 10                   // Max number of geofences per device
+
 // ─── Update Interval ─────────────────────────────────────────────────────────
 #define UPDATE_INTERVAL_MS     2000  // Push data to Firebase every 2s
+
+// ─── Geofence Structure ───────────────────────────────────────────────────────
+struct Geofence {
+  char id[32];
+  char name[64];
+  double latitude;
+  double longitude;
+  float radiusMeters;
+};
 
 // ─── Objects ─────────────────────────────────────────────────────────────────
 FirebaseData fbdo;
@@ -63,8 +76,14 @@ unsigned long lastFallTime = 0;
 unsigned long lastUpdateTime = 0;
 unsigned long lastButtonPressTime = 0;
 unsigned long lastDiagnosticTime = 0;
+unsigned long lastGeofenceCheckTime = 0;
 const unsigned long BUTTON_DEBOUNCE_MS = 500; // 500ms debounce
 const unsigned long DIAGNOSTIC_INTERVAL_MS = 10000; // Print diagnostic every 10s
+
+// Geofence state
+Geofence geofences[MAX_GEOFENCES];
+int geofenceCount = 0;
+bool lastGeofenceStatus[MAX_GEOFENCES] = {false}; // Track previous state
 
 // ─── Setup ───────────────────────────────────────────────────────────────────
 void setup() {
@@ -90,6 +109,10 @@ void setup() {
   Serial.println("\n=== ESP32 Guardian Firmware Started ===");
   Serial.printf("SOS Button Pin: GPIO %d (active LOW)\n", SOS_BUTTON_PIN);
   Serial.println("Ready for operation.");
+  
+  // Fetch initial geofences
+  delay(2000); // Wait for GPS to initialize
+  fetchGeofences();
 }
 
 // ─── Loop ────────────────────────────────────────────────────────────────────
@@ -157,6 +180,12 @@ void loop() {
         resetEmergency();
       }
     }
+  }
+
+  // Check geofences periodically
+  if (millis() - lastGeofenceCheckTime > GEOFENCE_CHECK_INTERVAL_MS) {
+    checkGeofences();
+    lastGeofenceCheckTime = millis();
   }
 
   // Blink LED
@@ -256,4 +285,145 @@ void connectFirebase() {
   Firebase.begin(&fbConfig, &fbAuth);
   Firebase.reconnectWiFi(true);
   Serial.println("Firebase connected.");
+}
+
+// ─── Geofence Functions ────────────────────────────────────────────────────────
+
+/// Fetch geofences from Firebase and update local array
+void fetchGeofences() {
+  if (!gps.location.isValid()) {
+    Serial.println("[GEOFENCE] Waiting for GPS fix...");
+    return;
+  }
+
+  // Fetch geofences from Firebase RTDB
+  String geofencePath = String("/devices/") + DEVICE_ID + "/geofences";
+  
+  if (Firebase.RTDB.getJSON(&fbdo, geofencePath)) {
+    // fbdo.jsonObject() contains the geofences array
+    // We'll iterate through the JSON object which should be an array
+    DynamicJsonDocument doc(4096);
+    deserializeJson(doc, fbdo.to<const char*>());
+    
+    geofenceCount = 0;
+    
+    // Check if it's an array
+    if (doc.is<JsonArray>()) {
+      JsonArray arr = doc.as<JsonArray>();
+      
+      for (size_t i = 0; i < arr.size() && i < MAX_GEOFENCES; i++) {
+        JsonObject obj = arr[i].as<JsonObject>();
+        
+        if (!obj.isNull()) {
+          strcpy(geofences[geofenceCount].id, obj["id"] | "unknown");
+          strcpy(geofences[geofenceCount].name, obj["name"] | "unnamed");
+          geofences[geofenceCount].latitude = obj["lat"] | 0.0;
+          geofences[geofenceCount].longitude = obj["lng"] | 0.0;
+          geofences[geofenceCount].radiusMeters = obj["radius"] | 500.0;
+          geofenceCount++;
+        }
+      }
+    }
+
+    Serial.printf("[GEOFENCE] Fetched %d geofences from Firebase\n", geofenceCount);
+  } else {
+    Serial.printf("[GEOFENCE] No geofences found or error: %s\n", fbdo.errorReason().c_str());
+    geofenceCount = 0;
+  }
+}
+
+/// Calculate distance between two GPS points using Haversine formula
+/// Returns distance in meters
+float calculateDistance(double lat1, double lon1, double lat2, double lon2) {
+  const float EARTH_RADIUS_M = 6371000.0; // Earth's radius in meters
+
+  // Convert to radians
+  double dlat = (lat2 - lat1) * 0.0174533; // PI/180
+  double dlon = (lon2 - lon1) * 0.0174533;
+
+  double a = sin(dlat / 2.0) * sin(dlat / 2.0)
+           + cos(lat1 * 0.0174533) * cos(lat2 * 0.0174533)
+           * sin(dlon / 2.0) * sin(dlon / 2.0);
+
+  double c = 2.0 * atan2(sqrt(a), sqrt(1.0 - a));
+  return EARTH_RADIUS_M * c;
+}
+
+/// Check geofence boundaries and report violations
+void checkGeofences() {
+  if (geofenceCount == 0) {
+    fetchGeofences();
+    return;
+  }
+
+  if (!gps.location.isValid()) {
+    return; // No GPS fix yet
+  }
+
+  double currentLat = gps.location.lat();
+  double currentLng = gps.location.lng();
+
+  Serial.printf("\n[GEOFENCE CHECK] Location: %.6f, %.6f\n", currentLat, currentLng);
+
+  for (int i = 0; i < geofenceCount; i++) {
+    float distance = calculateDistance(
+        currentLat,
+        currentLng,
+        geofences[i].latitude,
+        geofences[i].longitude
+    );
+
+    bool isInside = distance <= geofences[i].radiusMeters;
+    bool wasInside = lastGeofenceStatus[i];
+
+    // Detect state change
+    if (isInside != wasInside) {
+      String violationType = isInside ? "entered" : "exited";
+      Serial.printf("[GEOFENCE] Zone '%s': %s (distance: %.1f m)\n",
+          geofences[i].name, violationType.c_str(), distance);
+
+      // Log violation to Firebase
+      logGeofenceViolation(
+          geofences[i].id,
+          geofences[i].name,
+          violationType,
+          currentLat,
+          currentLng,
+          distance
+      );
+
+      lastGeofenceStatus[i] = isInside;
+    }
+  }
+
+  Serial.println("[GEOFENCE CHECK] Complete\n");
+}
+
+/// Log geofence violation to Firebase
+void logGeofenceViolation(
+    const char* geofenceId,
+    const char* geofenceName,
+    const String& type,
+    double lat,
+    double lng,
+    float distance) {
+  
+  String path = String("/devices/") + DEVICE_ID + "/geofence_violations/";
+  String timestamp = String(millis());
+  path += timestamp;
+
+  FirebaseJson json;
+  json.set("geofenceId", geofenceId);
+  json.set("name", geofenceName);
+  json.set("type", type.c_str());
+  json.set("lat", lat);
+  json.set("lng", lng);
+  json.set("distance", distance);
+  json.set("timestamp", millis());
+
+  if (Firebase.RTDB.setJSON(&fbdo, path, &json)) {
+    Serial.println("Geofence violation logged to Firebase");
+  } else {
+    Serial.printf("Failed to log violation: %s\n", fbdo.errorReason().c_str());
+  }
 }
