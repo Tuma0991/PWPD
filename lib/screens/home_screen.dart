@@ -9,7 +9,6 @@ import 'fall_detection_screen.dart';
 import 'alerts_screen.dart';
 import 'contacts_screen.dart';
 import 'geofence_screen.dart';
-import 'auth_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -51,7 +50,7 @@ class _HomeScreenState extends State<HomeScreen> {
         decoration: BoxDecoration(
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.08),
+              color: Colors.black.withValues(alpha: 0.08),
               blurRadius: 16,
               offset: const Offset(0, -4),
             )
@@ -176,7 +175,7 @@ class _DashboardTab extends StatelessWidget {
                 children: [
                   Icon(Icons.error_outline,
                       size: 48,
-                      color: AppTheme.danger.withOpacity(0.6)),
+                      color: AppTheme.danger.withValues(alpha: 0.6)),
                   const SizedBox(height: 16),
                   const Text(
                     'Failed to load device data',
@@ -191,7 +190,7 @@ class _DashboardTab extends StatelessWidget {
                     'Make sure your device is configured',
                     style: TextStyle(
                       fontSize: 13,
-                      color: AppTheme.textSecondary.withOpacity(0.7),
+                      color: AppTheme.textSecondary.withValues(alpha: 0.7),
                     ),
                   ),
                 ],
@@ -240,7 +239,7 @@ class _DashboardTab extends StatelessWidget {
                             data?.lastSeenLabel ?? 'Last seen unknown',
                             style: TextStyle(
                               fontSize: 12,
-                              color: AppTheme.textSecondary.withOpacity(0.8),
+                              color: AppTheme.textSecondary.withValues(alpha: 0.8),
                             ),
                           ),
                         ],
@@ -252,13 +251,13 @@ class _DashboardTab extends StatelessWidget {
                           horizontal: 12, vertical: 6),
                       decoration: BoxDecoration(
                         color: (isOnline ? AppTheme.success : AppTheme.textSecondary)
-                            .withOpacity(0.1),
+                            .withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(20),
                         border: Border.all(
                           color: (isOnline
                                   ? AppTheme.success
                                   : AppTheme.textSecondary)
-                              .withOpacity(0.4),
+                              .withValues(alpha: 0.4),
                         ),
                       ),
                       child: Row(
@@ -311,7 +310,7 @@ class _DashboardTab extends StatelessWidget {
                         borderRadius: BorderRadius.circular(16),
                         boxShadow: [
                           BoxShadow(
-                            color: AppTheme.danger.withOpacity(0.4),
+                            color: AppTheme.danger.withValues(alpha: 0.4),
                             blurRadius: 12,
                             offset: const Offset(0, 4),
                           )
@@ -475,7 +474,7 @@ class _StatusCard extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(6),
                 decoration: BoxDecoration(
-                  color: color.withOpacity(0.12),
+                  color: color.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Icon(icon, color: color, size: 18),
