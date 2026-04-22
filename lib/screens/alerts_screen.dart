@@ -1,56 +1,83 @@
 // lib/screens/alerts_screen.dart
-
+ 
 import 'dart:async';
-
+ 
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../services/firebase_service.dart';
 import '../theme.dart';
-
+ 
 class AlertsScreen extends StatefulWidget {
   final String deviceId;
   const AlertsScreen({super.key, required this.deviceId});
-
+ 
   @override
   State<AlertsScreen> createState() => _AlertsScreenState();
 }
-
+ 
 class _AlertsScreenState extends State<AlertsScreen> {
   final FirebaseService _firebase = FirebaseService();
   StreamSubscription<Map<String, dynamic>>? _emergencySubscription;
   bool _previousEmergencyActive = false;
   String _previousEmergencyReason = '';
-
+ 
+  // FIX: Track when the last SOS was received so we can ignore a fall alert
+  // that fires at nearly the same time (caused by the button-press jolt on
+  // the accelerometer). 3 seconds matches SOS_FALL_SUPPRESS_MS in firmware.
+  DateTime? _lastSOSTime;
+  static const _sosFallSuppressSeconds = 3;
+ 
   @override
   void initState() {
     super.initState();
     _subscribeToEmergencyEvents();
   }
-
+ 
   @override
   void dispose() {
     _emergencySubscription?.cancel();
     super.dispose();
   }
-
+ 
   void _subscribeToEmergencyEvents() {
     _emergencySubscription =
         _firebase.listenToEmergencyAlert(widget.deviceId).listen((event) async {
       final isEmergencyActive = event['active'] == true;
       final emergencyReason = event['reason'] as String? ?? '';
       final userId = _firebase.currentUser?.uid;
-
+ 
       if (!mounted) return;
-
+ 
       final isNewEmergency = isEmergencyActive &&
-          (!_previousEmergencyActive || emergencyReason != _previousEmergencyReason);
-
+          (!_previousEmergencyActive ||
+              emergencyReason != _previousEmergencyReason);
+ 
       _previousEmergencyActive = isEmergencyActive;
       _previousEmergencyReason = emergencyReason;
-
+ 
       if (!isNewEmergency || userId == null || userId.isEmpty) return;
-
+ 
       final isSOSButton = emergencyReason.contains('SOS button');
+      final isFall = emergencyReason.contains('Fall detected') ||
+          emergencyReason.contains('accelerometer');
+ 
+      // FIX: If this is an SOS press, record the time.
+      if (isSOSButton) {
+        _lastSOSTime = DateTime.now();
+      }
+ 
+      // FIX: If this is a fall alert but an SOS was received very recently,
+      // it's almost certainly the button-press jolt — skip logging it.
+      if (isFall && _lastSOSTime != null) {
+        final secondsSinceSOS =
+            DateTime.now().difference(_lastSOSTime!).inSeconds;
+        if (secondsSinceSOS < _sosFallSuppressSeconds) {
+          debugPrint(
+              '[AlertsScreen] Suppressed false fall alert caused by SOS button jolt.');
+          return;
+        }
+      }
+ 
       await _firebase.logAlert(userId, {
         'type': isSOSButton ? 'sos' : 'fall',
         'message': isSOSButton
@@ -61,11 +88,11 @@ class _AlertsScreenState extends State<AlertsScreen> {
       });
     });
   }
-
+ 
   @override
   Widget build(BuildContext context) {
     final userId = _firebase.currentUser?.uid ?? '';
-
+ 
     return Scaffold(
       appBar: AppBar(
         title: const Text('Alert History'),
@@ -78,9 +105,9 @@ class _AlertsScreenState extends State<AlertsScreen> {
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return const Center(child: CircularProgressIndicator());
                 }
-
+ 
                 final alerts = snapshot.data ?? [];
-
+ 
                 if (alerts.isEmpty) {
                   return Center(
                     child: Column(
@@ -109,7 +136,7 @@ class _AlertsScreenState extends State<AlertsScreen> {
                     ),
                   );
                 }
-
+ 
                 return ListView.separated(
                   padding: const EdgeInsets.all(20),
                   itemCount: alerts.length,
@@ -120,9 +147,8 @@ class _AlertsScreenState extends State<AlertsScreen> {
                     final message = alert['message'] ?? 'Alert';
                     final ts = alert['timestamp'];
                     final isFall = type == 'fall';
-                    final color =
-                        isFall ? AppTheme.danger : AppTheme.warning;
-
+                    final color = isFall ? AppTheme.danger : AppTheme.warning;
+ 
                     String timeStr = 'Unknown time';
                     if (ts != null) {
                       try {
@@ -130,7 +156,7 @@ class _AlertsScreenState extends State<AlertsScreen> {
                         timeStr = DateFormat('MMM d, y · h:mm a').format(dt);
                       } catch (_) {}
                     }
-
+ 
                     return Container(
                       padding: const EdgeInsets.all(14),
                       decoration: BoxDecoration(
@@ -168,9 +194,7 @@ class _AlertsScreenState extends State<AlertsScreen> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  isFall
-                                      ? 'Fall Detected'
-                                      : 'Emergency Alert',
+                                  isFall ? 'Fall Detected' : 'Emergency Alert',
                                   style: TextStyle(
                                     fontWeight: FontWeight.w800,
                                     color: color,
@@ -209,3 +233,4 @@ class _AlertsScreenState extends State<AlertsScreen> {
     );
   }
 }
+ 

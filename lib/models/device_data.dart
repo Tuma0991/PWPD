@@ -2,13 +2,8 @@
 
 class DeviceData {
   /// Number of seconds after the last device update before we consider it offline.
-  ///
-  /// Adjust this value to change how aggressively the app marks a device offline.
-  /// For example:
-  /// - 30 seconds for very strict live status
-  /// - 120 seconds for a more tolerant connection indicator
-  /// - 300 seconds for slower update intervals
-  static const int onlineStaleThresholdSeconds = 120;
+  /// 10s = 5 missed updates at the 2s push interval from the ESP32.
+  static const int onlineStaleThresholdSeconds = 10;
 
   final double latitude;
   final double longitude;
@@ -17,7 +12,6 @@ class DeviceData {
   final double accelZ;
   final bool fallDetected;
   final int timestamp;
-  final bool rawOnline;
 
   DeviceData({
     required this.latitude,
@@ -27,13 +21,12 @@ class DeviceData {
     required this.accelZ,
     required this.fallDetected,
     required this.timestamp,
-    required this.rawOnline,
   });
 
-  /// The app now considers the device online only when the device is reporting
-  /// online and the last timestamp is recent enough.
+  /// Device is online only if the last timestamp is recent enough.
+  /// No longer depends on a separate "online" flag — if the ESP32 is
+  /// pushing data, the timestamp is fresh. If it's off, it goes stale.
   bool get deviceOnline {
-    if (!rawOnline) return false;
     if (timestamp <= 0) return false;
     final ageMillis = DateTime.now().millisecondsSinceEpoch - timestamp;
     return ageMillis <= onlineStaleThresholdSeconds * 1000;
@@ -72,7 +65,6 @@ class DeviceData {
       accelZ: (accel['z'] ?? 0.0).toDouble(),
       fallDetected: map['fallDetected'] ?? false,
       timestamp: map['timestamp'] ?? 0,
-      rawOnline: map['online'] ?? false,
     );
   }
 
@@ -88,7 +80,6 @@ class DeviceData {
     double? accelZ,
     bool? fallDetected,
     int? timestamp,
-    bool? rawOnline,
   }) {
     return DeviceData(
       latitude: latitude ?? this.latitude,
@@ -98,7 +89,6 @@ class DeviceData {
       accelZ: accelZ ?? this.accelZ,
       fallDetected: fallDetected ?? this.fallDetected,
       timestamp: timestamp ?? this.timestamp,
-      rawOnline: rawOnline ?? this.rawOnline,
     );
   }
 }

@@ -1,5 +1,6 @@
 // lib/screens/home_screen.dart
-
+ 
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../services/firebase_service.dart';
 import '../models/device_data.dart';
@@ -9,29 +10,29 @@ import 'fall_detection_screen.dart';
 import 'alerts_screen.dart';
 import 'contacts_screen.dart';
 import 'geofence_screen.dart';
-
+ 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
-
+ 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
 }
-
+ 
 class _HomeScreenState extends State<HomeScreen> {
   int _currentIndex = 0;
-
+ 
   final String _deviceId = 'esp32_device_1';
-
+ 
   @override
   void initState() {
     super.initState();
   }
-
+ 
   @override
   Widget build(BuildContext context) {
     final firebase = FirebaseService();
     final userId = firebase.currentUser?.uid ?? '';
-    
+ 
     final screens = [
       _DashboardTab(deviceId: _deviceId),
       MapScreen(deviceId: _deviceId),
@@ -40,7 +41,7 @@ class _HomeScreenState extends State<HomeScreen> {
       GeofenceScreen(userId: userId, deviceId: _deviceId),
       const ContactsScreen(),
     ];
-
+ 
     return Scaffold(
       body: IndexedStack(
         index: _currentIndex,
@@ -96,18 +97,45 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 }
-
+ 
 // ─── Dashboard Tab ───────────────────────────────────────────────────────────
-
-class _DashboardTab extends StatelessWidget {
+ 
+class _DashboardTab extends StatefulWidget {
   final String deviceId;
   const _DashboardTab({required this.deviceId});
-
+ 
+  @override
+  State<_DashboardTab> createState() => _DashboardTabState();
+}
+ 
+class _DashboardTabState extends State<_DashboardTab> {
+  Timer? _refreshTimer;
+ 
+  // Hold the latest device data so the timer rebuild can re-evaluate
+  // deviceOnline against the current wall-clock time.
+  DeviceData? _latestData;
+ 
+  @override
+  void initState() {
+    super.initState();
+    // Rebuild every 5 seconds so deviceOnline is re-evaluated even when
+    // Firebase stops sending events (i.e. the device is off).
+    _refreshTimer = Timer.periodic(const Duration(seconds: 5), (_) {
+      if (mounted) setState(() {});
+    });
+  }
+ 
+  @override
+  void dispose() {
+    _refreshTimer?.cancel();
+    super.dispose();
+  }
+ 
   @override
   Widget build(BuildContext context) {
     final firebase = FirebaseService();
     final user = firebase.currentUser;
-
+ 
     return Scaffold(
       backgroundColor: AppTheme.background,
       appBar: AppBar(
@@ -136,9 +164,9 @@ class _DashboardTab extends StatelessWidget {
                   ],
                 ),
               );
-
+ 
               if (shouldLogout != true) return;
-
+ 
               try {
                 await firebase.signOut();
                 if (context.mounted) {
@@ -158,15 +186,16 @@ class _DashboardTab extends StatelessWidget {
         ],
       ),
       body: StreamBuilder<DeviceData>(
-        stream: firebase.listenToDeviceData(deviceId),
+        stream: firebase.listenToDeviceData(widget.deviceId),
         builder: (context, snapshot) {
           // Handle connection states
-          if (snapshot.connectionState == ConnectionState.waiting) {
+          if (snapshot.connectionState == ConnectionState.waiting &&
+              _latestData == null) {
             return const Center(
               child: CircularProgressIndicator(),
             );
           }
-
+ 
           // Handle errors
           if (snapshot.hasError) {
             return Center(
@@ -197,10 +226,20 @@ class _DashboardTab extends StatelessWidget {
               ),
             );
           }
-
-          final data = snapshot.data;
+ 
+          // Keep _latestData updated whenever Firebase sends a new event.
+          // Between events (e.g. device off), we keep using the last known
+          // data so deviceOnline can go stale naturally via the timer.
+          if (snapshot.hasData) {
+            _latestData = snapshot.data;
+          }
+ 
+          final data = _latestData;
+ 
+          // Re-evaluate deviceOnline against NOW — this is what the timer
+          // rebuild triggers when no new Firebase events are coming in.
           final isOnline = data?.deviceOnline ?? false;
-
+ 
           return RefreshIndicator(
             onRefresh: () async {},
             child: ListView(
@@ -231,7 +270,6 @@ class _DashboardTab extends StatelessWidget {
                               color: isOnline
                                   ? AppTheme.success
                                   : AppTheme.textSecondary,
-                              fontWeight: FontWeight.w600,
                             ),
                           ),
                           const SizedBox(height: 4),
@@ -289,18 +327,19 @@ class _DashboardTab extends StatelessWidget {
                     ),
                   ],
                 ),
-
+ 
                 const SizedBox(height: 20),
-
+ 
                 // ─── Emergency Banner ──────────────────────────────────────
                 StreamBuilder<Map<String, dynamic>>(
-                  stream: firebase.listenToEmergencyAlert(deviceId),
+                  stream: firebase.listenToEmergencyAlert(widget.deviceId),
                   builder: (context, snap) {
                     final emergencyData = snap.data ?? {};
                     final isEmergencyActive = emergencyData['active'] == true;
-                    final emergencyReason = emergencyData['reason'] as String? ?? '';
+                    final emergencyReason =
+                        emergencyData['reason'] as String? ?? '';
                     final isSOSButton = emergencyReason.contains('SOS button');
-                    
+ 
                     if (!isEmergencyActive) return const SizedBox.shrink();
                     return Container(
                       margin: const EdgeInsets.only(bottom: 20),
@@ -319,7 +358,9 @@ class _DashboardTab extends StatelessWidget {
                       child: Row(
                         children: [
                           Icon(
-                            isSOSButton ? Icons.emergency : Icons.warning_amber_rounded,
+                            isSOSButton
+                                ? Icons.emergency
+                                : Icons.warning_amber_rounded,
                             color: Colors.white,
                             size: 32,
                           ),
@@ -329,7 +370,9 @@ class _DashboardTab extends StatelessWidget {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  isSOSButton ? '🚨 SOS ALERT!' : '⚠️ FALL DETECTED',
+                                  isSOSButton
+                                      ? '🚨 SOS ALERT!'
+                                      : '⚠️ FALL DETECTED',
                                   style: const TextStyle(
                                     color: Colors.white,
                                     fontWeight: FontWeight.w800,
@@ -338,9 +381,9 @@ class _DashboardTab extends StatelessWidget {
                                 ),
                                 const SizedBox(height: 2),
                                 Text(
-                                  isSOSButton 
-                                    ? 'Emergency button was pressed!'
-                                    : 'Fall event detected!',
+                                  isSOSButton
+                                      ? 'Emergency button was pressed!'
+                                      : 'Fall event detected!',
                                   style: const TextStyle(
                                       color: Colors.white70, fontSize: 12),
                                 ),
@@ -349,7 +392,7 @@ class _DashboardTab extends StatelessWidget {
                           ),
                           TextButton(
                             onPressed: () =>
-                                firebase.clearEmergency(deviceId),
+                                firebase.clearEmergency(widget.deviceId),
                             child: const Text('Dismiss',
                                 style: TextStyle(color: Colors.white)),
                           ),
@@ -358,7 +401,7 @@ class _DashboardTab extends StatelessWidget {
                     );
                   },
                 ),
-
+ 
                 // ─── Status Cards ──────────────────────────────────────────
                 const Text(
                   'Device Status',
@@ -369,7 +412,7 @@ class _DashboardTab extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 12),
-
+ 
                 Row(
                   children: [
                     Expanded(
@@ -397,9 +440,9 @@ class _DashboardTab extends StatelessWidget {
                     ),
                   ],
                 ),
-
+ 
                 const SizedBox(height: 12),
-
+ 
                 Row(
                   children: [
                     Expanded(
@@ -421,7 +464,8 @@ class _DashboardTab extends StatelessWidget {
                         icon: Icons.wifi,
                         label: 'Connection',
                         value: isOnline ? 'Connected' : 'Disconnected',
-                        color: isOnline ? AppTheme.success : AppTheme.textSecondary,
+                        color:
+                            isOnline ? AppTheme.success : AppTheme.textSecondary,
                         isActive: isOnline,
                       ),
                     ),
@@ -435,14 +479,14 @@ class _DashboardTab extends StatelessWidget {
     );
   }
 }
-
+ 
 class _StatusCard extends StatelessWidget {
   final IconData icon;
   final String label;
   final String value;
   final Color color;
   final bool isActive;
-
+ 
   const _StatusCard({
     required this.icon,
     required this.label,
@@ -450,7 +494,7 @@ class _StatusCard extends StatelessWidget {
     required this.color,
     required this.isActive,
   });
-
+ 
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -515,5 +559,3 @@ class _StatusCard extends StatelessWidget {
     );
   }
 }
-
-
