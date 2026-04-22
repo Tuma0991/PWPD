@@ -5,7 +5,6 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import '../services/firebase_service.dart';
 import '../models/device_data.dart';
-import '../theme.dart';
 
 class MapScreen extends StatefulWidget {
   final String deviceId;
@@ -26,24 +25,6 @@ class _MapScreenState extends State<MapScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Live Location'),
-        actions: [
-          IconButton(
-            icon: Icon(
-              _followDevice ? Icons.my_location : Icons.location_searching,
-              color: _followDevice ? AppTheme.primary : AppTheme.textSecondary,
-            ),
-            onPressed: () {
-              setState(() => _followDevice = !_followDevice);
-              if (_followDevice && _lastData != null) {
-                _animateToDevice(_lastData!);
-              }
-            },
-            tooltip: 'Follow device',
-          ),
-        ],
-      ),
       body: StreamBuilder<DeviceData>(
         stream: _firebase.listenToDeviceData(widget.deviceId),
         builder: (context, snapshot) {
@@ -55,21 +36,31 @@ class _MapScreenState extends State<MapScreen> {
             markers.add(
               Marker(
                 point: LatLng(data.latitude, data.longitude),
-                width: 40,
-                height: 40,
+                width: 50,
+                height: 50,
                 child: Container(
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     color: data.fallDetected
-                        ? AppTheme.danger.withOpacity(0.8)
-                        : AppTheme.primary.withOpacity(0.8),
+                        ? const Color(0xFFE53935)
+                        : const Color(0xFF1565C0),
                     border: Border.all(color: Colors.white, width: 3),
+                    boxShadow: [
+                      BoxShadow(
+                        color: (data.fallDetected
+                                ? const Color(0xFFE53935)
+                                : const Color(0xFF1565C0))
+                            .withOpacity(0.4),
+                        blurRadius: 10,
+                        spreadRadius: 2,
+                      ),
+                    ],
                   ),
                   child: Center(
                     child: Icon(
-                      data.fallDetected ? Icons.warning : Icons.location_on,
+                      data.fallDetected ? Icons.warning : Icons.person_pin,
                       color: Colors.white,
-                      size: 16,
+                      size: 20,
                     ),
                   ),
                 ),
@@ -85,6 +76,7 @@ class _MapScreenState extends State<MapScreen> {
 
           return Stack(
             children: [
+              // Map
               FlutterMap(
                 mapController: _mapController,
                 options: MapOptions(
@@ -109,7 +101,93 @@ class _MapScreenState extends State<MapScreen> {
                 ],
               ),
 
-              // ─── Info Card at bottom ──────────────────────────────────
+              // ─── Top App Bar overlay ─────────────────────────────────
+              Positioned(
+                top: 0,
+                left: 0,
+                right: 0,
+                child: Container(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [
+                        const Color(0xFF1565C0).withOpacity(0.95),
+                        const Color(0xFF1565C0).withOpacity(0.0),
+                      ],
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                    ),
+                  ),
+                  child: SafeArea(
+                    bottom: false,
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.map, color: Colors.white, size: 20),
+                          const SizedBox(width: 8),
+                          const Text(
+                            'Live Location',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w800,
+                              fontSize: 18,
+                            ),
+                          ),
+                          const Spacer(),
+                          // Follow toggle button
+                          GestureDetector(
+                            onTap: () {
+                              setState(() => _followDevice = !_followDevice);
+                              if (_followDevice && _lastData != null) {
+                                _animateToDevice(_lastData!);
+                              }
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 12, vertical: 7),
+                              decoration: BoxDecoration(
+                                color: _followDevice
+                                    ? Colors.white
+                                    : Colors.white.withOpacity(0.2),
+                                borderRadius: BorderRadius.circular(20),
+                                border: Border.all(
+                                    color: Colors.white.withOpacity(0.4)),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    _followDevice
+                                        ? Icons.my_location
+                                        : Icons.location_searching,
+                                    size: 15,
+                                    color: _followDevice
+                                        ? const Color(0xFF1565C0)
+                                        : Colors.white,
+                                  ),
+                                  const SizedBox(width: 5),
+                                  Text(
+                                    _followDevice ? 'Following' : 'Free',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w700,
+                                      color: _followDevice
+                                          ? const Color(0xFF1565C0)
+                                          : Colors.white,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+
+              // ─── Bottom info card ────────────────────────────────────
               Positioned(
                 bottom: 20,
                 left: 16,
@@ -117,31 +195,50 @@ class _MapScreenState extends State<MapScreen> {
                 child: Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: AppTheme.surface,
-                    borderRadius: BorderRadius.circular(16),
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(20),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.12),
-                        blurRadius: 12,
-                        offset: const Offset(0, 4),
-                      )
+                        color: const Color(0xFF1565C0).withOpacity(0.15),
+                        blurRadius: 20,
+                        offset: const Offset(0, 6),
+                      ),
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.08),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
                     ],
                   ),
                   child: data == null
-                      ? const Center(
-                          child: Text('Waiting for device GPS data...',
-                              style:
-                                  TextStyle(color: AppTheme.textSecondary)))
+                      ? const Row(
+                          children: [
+                            SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Color(0xFF1565C0),
+                              ),
+                            ),
+                            SizedBox(width: 12),
+                            Text(
+                              'Waiting for device GPS data...',
+                              style: TextStyle(
+                                  color: Color(0xFF6B7A99), fontSize: 13),
+                            ),
+                          ],
+                        )
                       : Row(
                           children: [
                             Container(
                               padding: const EdgeInsets.all(10),
                               decoration: BoxDecoration(
-                                color: AppTheme.primary.withOpacity(0.1),
-                                shape: BoxShape.circle,
+                                color: const Color(0xFF1565C0).withOpacity(0.10),
+                                borderRadius: BorderRadius.circular(14),
                               ),
                               child: const Icon(Icons.location_on,
-                                  color: AppTheme.primary),
+                                  color: Color(0xFF1565C0), size: 20),
                             ),
                             const SizedBox(width: 12),
                             Expanded(
@@ -153,28 +250,29 @@ class _MapScreenState extends State<MapScreen> {
                                     'Device Location',
                                     style: TextStyle(
                                       fontWeight: FontWeight.w700,
-                                      color: AppTheme.textPrimary,
+                                      color: Color(0xFF1A2340),
+                                      fontSize: 13,
                                     ),
                                   ),
-                                  const SizedBox(height: 2),
+                                  const SizedBox(height: 3),
                                   Text(
                                     'Lat: ${data.latitude.toStringAsFixed(6)}',
                                     style: const TextStyle(
-                                        fontSize: 12,
-                                        color: AppTheme.textSecondary),
+                                        fontSize: 11,
+                                        color: Color(0xFF6B7A99)),
                                   ),
                                   Text(
                                     'Lng: ${data.longitude.toStringAsFixed(6)}',
                                     style: const TextStyle(
-                                        fontSize: 12,
-                                        color: AppTheme.textSecondary),
+                                        fontSize: 11,
+                                        color: Color(0xFF6B7A99)),
                                   ),
-                                  const SizedBox(height: 4),
+                                  const SizedBox(height: 3),
                                   Text(
                                     data.lastSeenLabel,
                                     style: const TextStyle(
-                                      fontSize: 11,
-                                      color: AppTheme.textSecondary,
+                                      fontSize: 10,
+                                      color: Color(0xFF9EA8C2),
                                     ),
                                   ),
                                 ],
@@ -182,30 +280,51 @@ class _MapScreenState extends State<MapScreen> {
                             ),
                             Container(
                               padding: const EdgeInsets.symmetric(
-                                  horizontal: 10, vertical: 4),
+                                  horizontal: 12, vertical: 6),
                               decoration: BoxDecoration(
                                 color: data.deviceOnline
-                                    ? AppTheme.success.withOpacity(0.1)
-                                    : AppTheme.danger.withOpacity(0.1),
-                                borderRadius: BorderRadius.circular(20),
-                              ),
-                              child: Text(
-                                data.deviceOnline ? 'Live' : 'Last Known',
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w700,
+                                    ? const Color(0xFF2E7D32).withOpacity(0.10)
+                                    : const Color(0xFFE53935).withOpacity(0.10),
+                                borderRadius: BorderRadius.circular(14),
+                                border: Border.all(
                                   color: data.deviceOnline
-                                      ? AppTheme.success
-                                      : AppTheme.danger,
+                                      ? const Color(0xFF2E7D32).withOpacity(0.3)
+                                      : const Color(0xFFE53935).withOpacity(0.3),
                                 ),
                               ),
-                            )
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Container(
+                                    width: 7,
+                                    height: 7,
+                                    decoration: BoxDecoration(
+                                      color: data.deviceOnline
+                                          ? const Color(0xFF43A047)
+                                          : const Color(0xFFE53935),
+                                      shape: BoxShape.circle,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 5),
+                                  Text(
+                                    data.deviceOnline ? 'Live' : 'Last Known',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w700,
+                                      color: data.deviceOnline
+                                          ? const Color(0xFF2E7D32)
+                                          : const Color(0xFFE53935),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
                           ],
                         ),
                 ),
               ),
 
-              // ─── Loading indicator ────────────────────────────────────
+              // ─── Loading indicator ───────────────────────────────────
               if (snapshot.connectionState == ConnectionState.waiting)
                 const Center(child: CircularProgressIndicator()),
             ],

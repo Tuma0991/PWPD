@@ -5,7 +5,6 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import '../models/geofence_model.dart';
 import '../services/firebase_service.dart';
-import '../theme.dart';
 
 class GeofenceScreen extends StatefulWidget {
   final String userId;
@@ -34,27 +33,42 @@ class _GeofenceScreenState extends State<GeofenceScreen> {
   Widget build(BuildContext context) {
     if (widget.userId.isEmpty) {
       return Scaffold(
+        backgroundColor: const Color(0xFFF0F4FF),
         appBar: AppBar(
-          title: const Text('Geofences'),
+          backgroundColor: const Color(0xFF1565C0),
           elevation: 0,
-          backgroundColor: AppTheme.primary,
-          foregroundColor: Colors.white,
+          title: const Text('Geofences',
+              style: TextStyle(
+                  color: Colors.white, fontWeight: FontWeight.w800)),
         ),
         body: const Center(
           child: Text(
             'Please log in to use geofences',
-            style: TextStyle(color: AppTheme.textSecondary),
+            style: TextStyle(color: Color(0xFF6B7A99)),
           ),
         ),
       );
     }
 
     return Scaffold(
+      backgroundColor: const Color(0xFFF0F4FF),
       appBar: AppBar(
-        title: const Text('Geofences'),
+        backgroundColor: const Color(0xFF1565C0),
         elevation: 0,
-        backgroundColor: AppTheme.primary,
-        foregroundColor: Colors.white,
+        title: const Row(
+          children: [
+            Icon(Icons.location_on, color: Colors.white, size: 20),
+            SizedBox(width: 8),
+            Text(
+              'Geofences',
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w800,
+                fontSize: 18,
+              ),
+            ),
+          ],
+        ),
       ),
       body: StreamBuilder<List<GeofenceModel>>(
         stream: firebase.getGeofences(widget.userId),
@@ -70,7 +84,8 @@ class _GeofenceScreenState extends State<GeofenceScreen> {
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(Icons.error_outline, size: 48, color: AppTheme.danger),
+                    const Icon(Icons.error_outline,
+                        size: 48, color: Color(0xFFE53935)),
                     const SizedBox(height: 16),
                     Text(
                       'Error loading geofences',
@@ -81,9 +96,7 @@ class _GeofenceScreenState extends State<GeofenceScreen> {
                       snapshot.error.toString(),
                       textAlign: TextAlign.center,
                       style: const TextStyle(
-                        fontSize: 12,
-                        color: AppTheme.textSecondary,
-                      ),
+                          fontSize: 12, color: Color(0xFF6B7A99)),
                     ),
                   ],
                 ),
@@ -95,6 +108,27 @@ class _GeofenceScreenState extends State<GeofenceScreen> {
 
           return Column(
             children: [
+              // Map hint bar
+              if (_isCreatingFence && _currentFenceCenter == null)
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  color: const Color(0xFF1565C0),
+                  child: const Row(
+                    children: [
+                      Icon(Icons.touch_app, color: Colors.white70, size: 16),
+                      SizedBox(width: 8),
+                      Text(
+                        'Tap on the map to place your geofence center',
+                        style: TextStyle(
+                            color: Colors.white70,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500),
+                      ),
+                    ],
+                  ),
+                ),
+
               Expanded(
                 flex: 2,
                 child: FlutterMap(
@@ -122,11 +156,12 @@ class _GeofenceScreenState extends State<GeofenceScreen> {
                             radius: 6,
                             useRadiusInMeter: false,
                             color: geofence.enabled
-                                ? AppTheme.primary.withOpacity(0.3)
+                                ? const Color(0xFF1565C0).withOpacity(0.3)
                                 : Colors.grey.withOpacity(0.2),
                             borderStrokeWidth: 2,
-                            borderColor:
-                                geofence.enabled ? AppTheme.primary : Colors.grey,
+                            borderColor: geofence.enabled
+                                ? const Color(0xFF1565C0)
+                                : Colors.grey,
                           ),
                       ],
                     ),
@@ -138,11 +173,11 @@ class _GeofenceScreenState extends State<GeofenceScreen> {
                             radius: geofence.radiusMeters,
                             useRadiusInMeter: true,
                             color: geofence.enabled
-                                ? AppTheme.primary.withOpacity(0.1)
+                                ? const Color(0xFF1565C0).withOpacity(0.1)
                                 : Colors.grey.withOpacity(0.1),
                             borderStrokeWidth: 1.5,
                             borderColor: geofence.enabled
-                                ? AppTheme.primary.withOpacity(0.6)
+                                ? const Color(0xFF1565C0).withOpacity(0.6)
                                 : Colors.grey.withOpacity(0.4),
                           ),
                       ],
@@ -154,15 +189,15 @@ class _GeofenceScreenState extends State<GeofenceScreen> {
                             point: _currentFenceCenter!,
                             radius: _currentFenceRadius,
                             useRadiusInMeter: true,
-                            color: AppTheme.primary.withOpacity(0.15),
+                            color: const Color(0xFF1565C0).withOpacity(0.15),
                             borderStrokeWidth: 2,
-                            borderColor: AppTheme.primary,
+                            borderColor: const Color(0xFF1565C0),
                           ),
                           CircleMarker(
                             point: _currentFenceCenter!,
                             radius: 8,
                             useRadiusInMeter: false,
-                            color: AppTheme.primary,
+                            color: const Color(0xFF1565C0),
                             borderStrokeWidth: 0,
                           ),
                         ],
@@ -181,15 +216,23 @@ class _GeofenceScreenState extends State<GeofenceScreen> {
         },
       ),
       floatingActionButton: !_isCreatingFence
-          ? FloatingActionButton(
+          ? FloatingActionButton.extended(
               onPressed: () => setState(() {
                 _isCreatingFence = true;
                 _currentFenceCenter = null;
                 _currentFenceRadius = 500;
                 _fenceName = '';
               }),
-              backgroundColor: AppTheme.primary,
-              child: const Icon(Icons.add),
+              backgroundColor: const Color(0xFF1565C0),
+              elevation: 4,
+              icon: const Icon(Icons.add_location_alt, color: Colors.white),
+              label: const Text(
+                'Add Fence',
+                style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 14),
+              ),
             )
           : null,
     );
@@ -197,142 +240,166 @@ class _GeofenceScreenState extends State<GeofenceScreen> {
 
   Widget _buildCreationPanel() {
     return Container(
-      decoration: BoxDecoration(
+      decoration: const BoxDecoration(
         color: Colors.white,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.1),
-            blurRadius: 8,
-            offset: const Offset(0, -2),
+            color: Color(0x14000000),
+            blurRadius: 12,
+            offset: Offset(0, -3),
           ),
         ],
       ),
       child: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(18),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              'New Geofence',
-              style: Theme.of(context).textTheme.titleLarge,
-            ),
-            const SizedBox(height: 12),
-            TextFormField(
-              initialValue: _fenceName,
-              decoration: InputDecoration(
-                label: const Text('Fence Name'),
-                hintText: 'Home, Office, etc.',
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 12,
-                ),
-                prefixIcon: const Icon(Icons.location_on),
-              ),
-              onChanged: (name) => _fenceName = name,
-            ),
-            const SizedBox(height: 16),
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: AppTheme.primary.withOpacity(0.05),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(
-                  color: AppTheme.primary.withOpacity(0.2),
+            // Handle
+            Center(
+              child: Container(
+                width: 36,
+                height: 4,
+                margin: const EdgeInsets.only(bottom: 14),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFDDE3F0),
+                  borderRadius: BorderRadius.circular(2),
                 ),
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Location',
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: AppTheme.textSecondary,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    '${_currentFenceCenter!.latitude.toStringAsFixed(6)}° N\n${_currentFenceCenter!.longitude.toStringAsFixed(6)}° E',
-                    style: const TextStyle(
-                      fontSize: 13,
-                      fontFamily: 'monospace',
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ],
-              ),
             ),
-            const SizedBox(height: 16),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            Row(
               children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      'Radius',
-                      style: Theme.of(context).textTheme.titleSmall,
-                    ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 4,
-                      ),
-                      decoration: BoxDecoration(
-                        color: AppTheme.primary.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Text(
-                        '${_currentFenceRadius.toInt()}m',
-                        style: TextStyle(
-                          fontWeight: FontWeight.w600,
-                          color: AppTheme.primary,
-                        ),
-                      ),
-                    ),
-                  ],
+                Container(
+                  padding: const EdgeInsets.all(7),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1565C0).withOpacity(0.10),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(Icons.add_location_alt,
+                      color: Color(0xFF1565C0), size: 18),
                 ),
-                const SizedBox(height: 8),
-                Slider(
-                  value: _currentFenceRadius,
-                  min: 100,
-                  max: 5000,
-                  divisions: 49,
-                  label: '${_currentFenceRadius.toInt()}m',
-                  onChanged: (value) =>
-                      setState(() => _currentFenceRadius = value),
-                ),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        '100m',
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: AppTheme.textSecondary,
-                        ),
-                      ),
-                      Text(
-                        '5000m',
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: AppTheme.textSecondary,
-                        ),
-                      ),
-                    ],
+                const SizedBox(width: 10),
+                const Text(
+                  'New Geofence',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF1A2340),
+                    fontSize: 16,
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 14),
+            TextFormField(
+              initialValue: _fenceName,
+              style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                  color: Color(0xFF1A2340)),
+              decoration: InputDecoration(
+                labelText: 'Fence Name',
+                hintText: 'Home, School, Office...',
+                labelStyle:
+                    const TextStyle(color: Color(0xFF6B7A99), fontSize: 13),
+                prefixIcon: const Icon(Icons.location_on,
+                    color: Color(0xFF1565C0), size: 20),
+                filled: true,
+                fillColor: const Color(0xFFF7F9FF),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: const BorderSide(
+                      color: Color(0xFFDDE3F0), width: 1.5),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: const BorderSide(
+                      color: Color(0xFF1565C0), width: 2),
+                ),
+                contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 14, vertical: 13),
+              ),
+              onChanged: (name) => _fenceName = name,
+            ),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF0F4FF),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                    color: const Color(0xFF1565C0).withOpacity(0.2)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.pin_drop,
+                      size: 16, color: Color(0xFF1565C0)),
+                  const SizedBox(width: 8),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Selected Location',
+                        style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFF6B7A99)),
+                      ),
+                      Text(
+                        '${_currentFenceCenter!.latitude.toStringAsFixed(5)}°, ${_currentFenceCenter!.longitude.toStringAsFixed(5)}°',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontFamily: 'monospace',
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF1565C0),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text(
+                  'Radius',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF1A2340),
+                    fontSize: 13,
+                  ),
+                ),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1565C0).withOpacity(0.10),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Text(
+                    '${_currentFenceRadius.toInt()}m',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF1565C0),
+                      fontSize: 13,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            Slider(
+              value: _currentFenceRadius,
+              min: 100,
+              max: 5000,
+              divisions: 49,
+              activeColor: const Color(0xFF1565C0),
+              label: '${_currentFenceRadius.toInt()}m',
+              onChanged: (value) => setState(() => _currentFenceRadius = value),
+            ),
+            const SizedBox(height: 12),
             Row(
               children: [
                 Expanded(
@@ -342,7 +409,18 @@ class _GeofenceScreenState extends State<GeofenceScreen> {
                       _currentFenceCenter = null;
                       _fenceName = '';
                     }),
-                    child: const Text('Cancel'),
+                    style: OutlinedButton.styleFrom(
+                      side: const BorderSide(color: Color(0xFFDDE3F0)),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12)),
+                      padding: const EdgeInsets.symmetric(vertical: 13),
+                    ),
+                    child: const Text(
+                      'Cancel',
+                      style: TextStyle(
+                          color: Color(0xFF6B7A99),
+                          fontWeight: FontWeight.w700),
+                    ),
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -351,7 +429,18 @@ class _GeofenceScreenState extends State<GeofenceScreen> {
                     onPressed: _fenceName.isEmpty || _currentFenceCenter == null
                         ? null
                         : () => _saveFence(),
-                    child: const Text('Save Fence'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF1565C0),
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12)),
+                      padding: const EdgeInsets.symmetric(vertical: 13),
+                    ),
+                    child: const Text(
+                      'Save Fence',
+                      style: TextStyle(fontWeight: FontWeight.w700),
+                    ),
                   ),
                 ),
               ],
@@ -364,47 +453,103 @@ class _GeofenceScreenState extends State<GeofenceScreen> {
 
   Widget _buildGeofenceList(List<GeofenceModel> geofences) {
     if (geofences.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.location_off,
-              size: 48,
-              color: AppTheme.textSecondary,
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'No geofences yet',
-              style: Theme.of(context).textTheme.bodyLarge,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Tap + to create one',
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
-          ],
+      return Container(
+        decoration: const BoxDecoration(
+          color: Color(0xFFF0F4FF),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(18),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF1565C0).withOpacity(0.08),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.location_off,
+                  size: 36,
+                  color: Color(0xFF1565C0),
+                ),
+              ),
+              const SizedBox(height: 14),
+              const Text(
+                'No geofences yet',
+                style: TextStyle(
+                  fontWeight: FontWeight.w800,
+                  color: Color(0xFF1A2340),
+                  fontSize: 16,
+                ),
+              ),
+              const SizedBox(height: 6),
+              const Text(
+                'Tap "Add Fence" to create a safe zone',
+                style: TextStyle(fontSize: 13, color: Color(0xFF6B7A99)),
+              ),
+            ],
+          ),
         ),
       );
     }
 
     return Container(
-      decoration: BoxDecoration(
-        color: Colors.grey.shade50,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+      decoration: const BoxDecoration(
+        color: Color(0xFFF0F4FF),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
-      child: ListView.builder(
-        padding: const EdgeInsets.all(12),
-        itemCount: geofences.length,
-        itemBuilder: (context, index) {
-          final geofence = geofences[index];
-          return _GeofenceCard(
-            geofence: geofence,
-            onEdit: () => _editGeofence(geofence),
-            onDelete: () => _showDeleteDialog(geofence),
-            onToggle: () => _toggleGeofence(geofence),
-          );
-        },
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 6),
+            child: Row(
+              children: [
+                const Text(
+                  'Saved Zones',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF1A2340),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1565C0).withOpacity(0.12),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Text(
+                    '${geofences.length}',
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF1565C0),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Expanded(
+            child: ListView.builder(
+              padding: const EdgeInsets.fromLTRB(12, 4, 12, 80),
+              itemCount: geofences.length,
+              itemBuilder: (context, index) {
+                final geofence = geofences[index];
+                return _GeofenceCard(
+                  geofence: geofence,
+                  onEdit: () => _editGeofence(geofence),
+                  onDelete: () => _showDeleteDialog(geofence),
+                  onToggle: () => _toggleGeofence(geofence),
+                );
+              },
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -438,7 +583,14 @@ class _GeofenceScreenState extends State<GeofenceScreen> {
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Geofence created')),
+          SnackBar(
+            content: const Text('Geofence created successfully!'),
+            backgroundColor: const Color(0xFF2E7D32),
+            shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12)),
+            behavior: SnackBarBehavior.floating,
+            margin: const EdgeInsets.all(16),
+          ),
         );
       }
     } catch (e) {
@@ -465,8 +617,10 @@ class _GeofenceScreenState extends State<GeofenceScreen> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Delete Geofence'),
-        content: Text('Delete "${geofence.name}"?'),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('Delete Geofence',
+            style: TextStyle(fontWeight: FontWeight.w800)),
+        content: Text('Delete "${geofence.name}"? This cannot be undone.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
@@ -477,8 +631,13 @@ class _GeofenceScreenState extends State<GeofenceScreen> {
               await _deleteGeofence(geofence.id);
               if (mounted) Navigator.pop(context);
             },
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            child: const Text('Delete', style: TextStyle(color: Colors.white)),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFE53935),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10)),
+            ),
+            child: const Text('Delete',
+                style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
@@ -515,7 +674,8 @@ class _GeofenceScreenState extends State<GeofenceScreen> {
   }
 }
 
-// ─── Geofence Card Widget ──────────────────────────────────────────────────
+// ─── Geofence Card Widget ─────────────────────────────────────────────────────
+
 class _GeofenceCard extends StatelessWidget {
   final GeofenceModel geofence;
   final VoidCallback onEdit;
@@ -531,122 +691,135 @@ class _GeofenceCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Name and toggle row
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        geofence.name,
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
-                          color: geofence.enabled
-                              ? AppTheme.textPrimary
-                              : Colors.grey,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        '${geofence.radiusMeters.toInt()}m radius',
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: geofence.enabled
-                              ? AppTheme.textSecondary
-                              : Colors.grey.withOpacity(0.7),
-                        ),
-                      ),
-                    ],
-                  ),
+    final color = geofence.enabled
+        ? const Color(0xFF1565C0)
+        : const Color(0xFF9EA8C2);
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: color.withOpacity(0.15), width: 1.5),
+        boxShadow: [
+          BoxShadow(
+            color: color.withOpacity(0.06),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: color.withOpacity(0.10),
+                  borderRadius: BorderRadius.circular(10),
                 ),
-                Switch(
-                  value: geofence.enabled,
-                  onChanged: (_) => onToggle(),
+                child: Icon(Icons.location_on, size: 18, color: color),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      geofence.name,
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: geofence.enabled
+                            ? const Color(0xFF1A2340)
+                            : const Color(0xFF9EA8C2),
+                      ),
+                    ),
+                    Text(
+                      '${geofence.radiusMeters.toInt()}m radius',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: geofence.enabled
+                            ? const Color(0xFF6B7A99)
+                            : Colors.grey.withOpacity(0.6),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Switch(
+                value: geofence.enabled,
+                onChanged: (_) => onToggle(),
+                activeColor: const Color(0xFF1565C0),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF0F4FF),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.pin_drop,
+                    size: 13, color: Color(0xFF1565C0)),
+                const SizedBox(width: 6),
+                Text(
+                  '${geofence.latitude.toStringAsFixed(5)}°, ${geofence.longitude.toStringAsFixed(5)}°',
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontFamily: 'monospace',
+                    color: Color(0xFF6B7A99),
+                  ),
                 ),
               ],
             ),
-            const SizedBox(height: 12),
-
-            // Coordinates display
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: AppTheme.primary.withOpacity(0.05),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(
-                  color: AppTheme.primary.withOpacity(0.2),
+          ),
+          const SizedBox(height: 10),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              TextButton.icon(
+                onPressed: onEdit,
+                style: TextButton.styleFrom(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                ),
+                icon: const Icon(Icons.edit_outlined,
+                    size: 16, color: Color(0xFF1565C0)),
+                label: const Text(
+                  'Edit',
+                  style: TextStyle(
+                      color: Color(0xFF1565C0),
+                      fontWeight: FontWeight.w700,
+                      fontSize: 13),
                 ),
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      const Icon(Icons.location_on, size: 16, color: AppTheme.primary),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          'Lat: ${geofence.latitude.toStringAsFixed(6)}°',
-                          style: const TextStyle(
-                            fontSize: 12,
-                            fontFamily: 'monospace',
-                            color: AppTheme.textSecondary,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 6),
-                  Row(
-                    children: [
-                      const Icon(Icons.location_on, size: 16, color: AppTheme.primary),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          'Lng: ${geofence.longitude.toStringAsFixed(6)}°',
-                          style: const TextStyle(
-                            fontSize: 12,
-                            fontFamily: 'monospace',
-                            color: AppTheme.textSecondary,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
+              const SizedBox(width: 4),
+              TextButton.icon(
+                onPressed: onDelete,
+                style: TextButton.styleFrom(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                ),
+                icon: const Icon(Icons.delete_outline,
+                    size: 16, color: Color(0xFFE53935)),
+                label: const Text(
+                  'Delete',
+                  style: TextStyle(
+                      color: Color(0xFFE53935),
+                      fontWeight: FontWeight.w700,
+                      fontSize: 13),
+                ),
               ),
-            ),
-            const SizedBox(height: 12),
-
-            // Action buttons
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                TextButton.icon(
-                  onPressed: onEdit,
-                  icon: const Icon(Icons.edit, size: 18),
-                  label: const Text('Edit'),
-                ),
-                const SizedBox(width: 8),
-                TextButton.icon(
-                  onPressed: onDelete,
-                  icon: const Icon(Icons.delete, size: 18, color: Colors.red),
-                  label: const Text('Delete', style: TextStyle(color: Colors.red)),
-                ),
-              ],
-            ),
-          ],
-        ),
+            ],
+          ),
+        ],
       ),
     );
   }
