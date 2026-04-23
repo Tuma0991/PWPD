@@ -1,5 +1,7 @@
 // lib/screens/map_screen.dart
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
@@ -15,330 +17,391 @@ class MapScreen extends StatefulWidget {
 }
 
 class _MapScreenState extends State<MapScreen> {
-  final _firebase = FirebaseService();
+  final FirebaseService _firebase = FirebaseService();
   final MapController _mapController = MapController();
-  DeviceData? _lastData;
-  bool _followDevice = true;
 
-  static const LatLng _defaultCenter = LatLng(10.3157, 123.8854); // Cebu, PH
+  LatLng? _deviceLocation;
+  String _lastSeenLabel = 'Unknown';
+  bool _isFollowing = true;
+  bool _hasMovedOnce = false;
+  DeviceData? _latestData;
+
+  StreamSubscription<DeviceData>? _dataSub;
+
+  static const LatLng _defaultCenter = LatLng(10.0, 123.0); // fallback
+
+  /// ESP32 sends near-zero coords (e.g. 0.033, 0.300) when GPS has no fix.
+  /// Only treat as real if at least one axis is outside a ±0.5° dead-zone.
+  static bool _isValidGps(double lat, double lng) =>
+      lat.abs() > 0.5 || lng.abs() > 0.5;
+
+  @override
+  void initState() {
+    super.initState();
+    _dataSub = _firebase.listenToDeviceData(widget.deviceId).listen((data) {
+      if (!mounted) return;
+      setState(() {
+        _latestData = data;
+        if (_isValidGps(data.latitude, data.longitude)) {
+          _deviceLocation = LatLng(data.latitude, data.longitude);
+          _lastSeenLabel = data.lastSeenLabel;
+          if (_isFollowing) {
+            // Move camera to follow device
+            try {
+              if (_hasMovedOnce) {
+                _mapController.move(_deviceLocation!, _mapController.camera.zoom);
+              } else {
+                _mapController.move(_deviceLocation!, 15.0);
+                _hasMovedOnce = true;
+              }
+            } catch (_) {}
+          }
+        }
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    _dataSub?.cancel();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: StreamBuilder<DeviceData>(
-        stream: _firebase.listenToDeviceData(widget.deviceId),
-        builder: (context, snapshot) {
-          final data = snapshot.data;
-          _lastData = data;
+    final center = _deviceLocation ?? _defaultCenter;
+    final hasLocation = _deviceLocation != null;
 
-          List<Marker> markers = [];
-          if (data != null && data.latitude != 0) {
-            markers.add(
-              Marker(
-                point: LatLng(data.latitude, data.longitude),
-                width: 50,
-                height: 50,
-                child: Container(
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: data.fallDetected
-                        ? const Color(0xFFE53935)
-                        : const Color(0xFF1565C0),
-                    border: Border.all(color: Colors.white, width: 3),
-                    boxShadow: [
-                      BoxShadow(
-                        color: (data.fallDetected
-                                ? const Color(0xFFE53935)
-                                : const Color(0xFF1565C0))
-                            .withOpacity(0.4),
-                        blurRadius: 10,
-                        spreadRadius: 2,
-                      ),
-                    ],
-                  ),
-                  child: Center(
-                    child: Icon(
-                      data.fallDetected ? Icons.warning : Icons.person_pin,
-                      color: Colors.white,
-                      size: 20,
-                    ),
-                  ),
+    return Scaffold(
+      backgroundColor: const Color(0xFFF0F4FF),
+      appBar: AppBar(
+        backgroundColor: const Color(0xFF1565C0),
+        elevation: 0,
+        title: const Row(
+          children: [
+            Icon(Icons.map, color: Colors.white, size: 20),
+            SizedBox(width: 8),
+            Text(
+              'Live Location',
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w800,
+                fontSize: 18,
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          // Follow toggle
+          GestureDetector(
+            onTap: () {
+              setState(() => _isFollowing = !_isFollowing);
+              if (_isFollowing && _deviceLocation != null) {
+                _mapController.move(_deviceLocation!, 15.0);
+              }
+            },
+            child: Container(
+              margin: const EdgeInsets.only(right: 14),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: _isFollowing
+                    ? Colors.white.withOpacity(0.20)
+                    : Colors.white.withOpacity(0.08),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                  color: Colors.white.withOpacity(0.35),
                 ),
               ),
-            );
-
-            if (_followDevice) {
-              WidgetsBinding.instance.addPostFrameCallback((_) {
-                _animateToDevice(data);
-              });
-            }
-          }
-
-          return Stack(
-            children: [
-              // Map
-              FlutterMap(
-                mapController: _mapController,
-                options: MapOptions(
-                  initialCenter: data != null && data.latitude != 0
-                      ? LatLng(data.latitude, data.longitude)
-                      : _defaultCenter,
-                  initialZoom: 16,
-                  onPositionChanged: (mapPosition, hasGesture) {
-                    if (hasGesture && _followDevice) {
-                      setState(() => _followDevice = false);
-                    }
-                  },
-                ),
+              child: Row(
                 children: [
-                  TileLayer(
-                    urlTemplate:
-                        'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                    userAgentPackageName: 'com.example.pwpd',
-                    maxZoom: 19,
+                  Icon(
+                    _isFollowing ? Icons.gps_fixed : Icons.gps_not_fixed,
+                    color: Colors.white,
+                    size: 14,
                   ),
-                  MarkerLayer(markers: markers),
+                  const SizedBox(width: 5),
+                  Text(
+                    _isFollowing ? 'Following' : 'Free',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
                 ],
               ),
-
-              // ─── Top App Bar overlay ─────────────────────────────────
-              Positioned(
-                top: 0,
-                left: 0,
-                right: 0,
-                child: Container(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [
-                        const Color(0xFF1565C0).withOpacity(0.95),
-                        const Color(0xFF1565C0).withOpacity(0.0),
-                      ],
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                    ),
-                  ),
-                  child: SafeArea(
-                    bottom: false,
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
-                      child: Row(
-                        children: [
-                          const Icon(Icons.map, color: Colors.white, size: 20),
-                          const SizedBox(width: 8),
-                          const Text(
-                            'Live Location',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w800,
-                              fontSize: 18,
-                            ),
-                          ),
-                          const Spacer(),
-                          // Follow toggle button
-                          GestureDetector(
-                            onTap: () {
-                              setState(() => _followDevice = !_followDevice);
-                              if (_followDevice && _lastData != null) {
-                                _animateToDevice(_lastData!);
-                              }
-                            },
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 12, vertical: 7),
-                              decoration: BoxDecoration(
-                                color: _followDevice
-                                    ? Colors.white
-                                    : Colors.white.withOpacity(0.2),
-                                borderRadius: BorderRadius.circular(20),
-                                border: Border.all(
-                                    color: Colors.white.withOpacity(0.4)),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(
-                                    _followDevice
-                                        ? Icons.my_location
-                                        : Icons.location_searching,
-                                    size: 15,
-                                    color: _followDevice
-                                        ? const Color(0xFF1565C0)
-                                        : Colors.white,
-                                  ),
-                                  const SizedBox(width: 5),
-                                  Text(
-                                    _followDevice ? 'Following' : 'Free',
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w700,
-                                      color: _followDevice
-                                          ? const Color(0xFF1565C0)
-                                          : Colors.white,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
+            ),
+          ),
+        ],
+      ),
+      body: Stack(
+        children: [
+          // ── Map ──────────────────────────────────────────────────────────
+          FlutterMap(
+            mapController: _mapController,
+            options: MapOptions(
+              initialCenter: center,
+              initialZoom: hasLocation ? 15.0 : 5.0,
+              interactionOptions: const InteractionOptions(
+                flags: InteractiveFlag.all,
+              ),
+              onPositionChanged: (position, hasGesture) {
+                if (hasGesture && _isFollowing) {
+                  setState(() => _isFollowing = false);
+                }
+              },
+            ),
+            children: [
+              // ── Tile Layer (OpenStreetMap) ─────────────────────────────
+              TileLayer(
+                urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                userAgentPackageName: 'com.example.pwpd',
+                maxZoom: 19,
+                // Required: OSM rejects requests without a valid User-Agent
+                additionalOptions: const {
+                  'User-Agent': 'pwpd/1.0 (Flutter; Android)',
+                },
               ),
 
-              // ─── Bottom info card ────────────────────────────────────
-              Positioned(
-                bottom: 20,
-                left: 16,
-                right: 16,
-                child: Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(20),
-                    boxShadow: [
-                      BoxShadow(
-                        color: const Color(0xFF1565C0).withOpacity(0.15),
-                        blurRadius: 20,
-                        offset: const Offset(0, 6),
+              // ── Device Marker ─────────────────────────────────────────
+              if (hasLocation)
+                MarkerLayer(
+                  markers: [
+                    Marker(
+                      point: _deviceLocation!,
+                      width: 56,
+                      height: 56,
+                      child: const _DeviceMarker(),
+                    ),
+                  ],
+                ),
+            ],
+          ),
+
+          // ── Bottom Info Card ──────────────────────────────────────────
+          Positioned(
+            left: 16,
+            right: 16,
+            bottom: 24,
+            child: Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFF1565C0).withOpacity(0.12),
+                    blurRadius: 20,
+                    offset: const Offset(0, 6),
+                  ),
+                ],
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF1565C0).withOpacity(0.10),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(
+                      Icons.location_on,
+                      color: Color(0xFF1565C0),
+                      size: 22,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Device Location',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w800,
+                            color: Color(0xFF1A2340),
+                          ),
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          hasLocation
+                              ? 'Lat: ${_deviceLocation!.latitude.toStringAsFixed(6)}\n'
+                                  'Lng: ${_deviceLocation!.longitude.toStringAsFixed(6)}'
+                              : 'No GPS signal yet',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: Color(0xFF6B7A99),
+                            height: 1.4,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          _lastSeenLabel,
+                          style: const TextStyle(
+                            fontSize: 11,
+                            color: Color(0xFF9EA8C2),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  // Status pill
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: hasLocation
+                          ? (_latestData?.deviceOnline == true
+                              ? const Color(0xFF43A047).withOpacity(0.10)
+                              : const Color(0xFFE53935).withOpacity(0.08))
+                          : const Color(0xFF9EA8C2).withOpacity(0.10),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                        color: hasLocation
+                            ? (_latestData?.deviceOnline == true
+                                ? const Color(0xFF43A047).withOpacity(0.3)
+                                : const Color(0xFFE53935).withOpacity(0.3))
+                            : const Color(0xFF9EA8C2).withOpacity(0.3),
                       ),
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.08),
-                        blurRadius: 8,
-                        offset: const Offset(0, 2),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          width: 7,
+                          height: 7,
+                          decoration: BoxDecoration(
+                            color: hasLocation
+                                ? (_latestData?.deviceOnline == true
+                                    ? const Color(0xFF43A047)
+                                    : const Color(0xFFE53935))
+                                : const Color(0xFF9EA8C2),
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                        const SizedBox(width: 5),
+                        Text(
+                          hasLocation
+                              ? (_latestData?.deviceOnline == true
+                                  ? 'Live'
+                                  : 'Last Known')
+                              : 'No Signal',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            color: hasLocation
+                                ? (_latestData?.deviceOnline == true
+                                    ? const Color(0xFF43A047)
+                                    : const Color(0xFFE53935))
+                                : const Color(0xFF9EA8C2),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          // ── No location overlay ───────────────────────────────────────
+          if (!hasLocation)
+            Positioned.fill(
+              child: IgnorePointer(
+                child: Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.85),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.gps_off,
+                          size: 36,
+                          color: Color(0xFF9EA8C2),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.85),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Text(
+                          'Waiting for GPS signal…',
+                          style: TextStyle(
+                            color: Color(0xFF6B7A99),
+                            fontWeight: FontWeight.w600,
+                            fontSize: 13,
+                          ),
+                        ),
                       ),
                     ],
                   ),
-                  child: data == null
-                      ? const Row(
-                          children: [
-                            SizedBox(
-                              width: 16,
-                              height: 16,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: Color(0xFF1565C0),
-                              ),
-                            ),
-                            SizedBox(width: 12),
-                            Text(
-                              'Waiting for device GPS data...',
-                              style: TextStyle(
-                                  color: Color(0xFF6B7A99), fontSize: 13),
-                            ),
-                          ],
-                        )
-                      : Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.all(10),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFF1565C0).withOpacity(0.10),
-                                borderRadius: BorderRadius.circular(14),
-                              ),
-                              child: const Icon(Icons.location_on,
-                                  color: Color(0xFF1565C0), size: 20),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  const Text(
-                                    'Device Location',
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.w700,
-                                      color: Color(0xFF1A2340),
-                                      fontSize: 13,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 3),
-                                  Text(
-                                    'Lat: ${data.latitude.toStringAsFixed(6)}',
-                                    style: const TextStyle(
-                                        fontSize: 11,
-                                        color: Color(0xFF6B7A99)),
-                                  ),
-                                  Text(
-                                    'Lng: ${data.longitude.toStringAsFixed(6)}',
-                                    style: const TextStyle(
-                                        fontSize: 11,
-                                        color: Color(0xFF6B7A99)),
-                                  ),
-                                  const SizedBox(height: 3),
-                                  Text(
-                                    data.lastSeenLabel,
-                                    style: const TextStyle(
-                                      fontSize: 10,
-                                      color: Color(0xFF9EA8C2),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 12, vertical: 6),
-                              decoration: BoxDecoration(
-                                color: data.deviceOnline
-                                    ? const Color(0xFF2E7D32).withOpacity(0.10)
-                                    : const Color(0xFFE53935).withOpacity(0.10),
-                                borderRadius: BorderRadius.circular(14),
-                                border: Border.all(
-                                  color: data.deviceOnline
-                                      ? const Color(0xFF2E7D32).withOpacity(0.3)
-                                      : const Color(0xFFE53935).withOpacity(0.3),
-                                ),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Container(
-                                    width: 7,
-                                    height: 7,
-                                    decoration: BoxDecoration(
-                                      color: data.deviceOnline
-                                          ? const Color(0xFF43A047)
-                                          : const Color(0xFFE53935),
-                                      shape: BoxShape.circle,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 5),
-                                  Text(
-                                    data.deviceOnline ? 'Live' : 'Last Known',
-                                    style: TextStyle(
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.w700,
-                                      color: data.deviceOnline
-                                          ? const Color(0xFF2E7D32)
-                                          : const Color(0xFFE53935),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
                 ),
               ),
-
-              // ─── Loading indicator ───────────────────────────────────
-              if (snapshot.connectionState == ConnectionState.waiting)
-                const Center(child: CircularProgressIndicator()),
-            ],
-          );
-        },
+            ),
+        ],
       ),
+
+      // ── Re-center FAB ──────────────────────────────────────────────────
+      floatingActionButton: hasLocation && !_isFollowing
+          ? FloatingActionButton.small(
+              backgroundColor: const Color(0xFF1565C0),
+              onPressed: () {
+                setState(() => _isFollowing = true);
+                _mapController.move(_deviceLocation!, 15.0);
+              },
+              child: const Icon(Icons.my_location, color: Colors.white),
+            )
+          : null,
     );
   }
+}
 
-  void _animateToDevice(DeviceData data) {
-    if (data.latitude == 0 && data.longitude == 0) return;
-    _mapController.move(
-      LatLng(data.latitude, data.longitude),
-      16,
+// ─── Device Marker Widget ─────────────────────────────────────────────────────
+
+class _DeviceMarker extends StatelessWidget {
+  const _DeviceMarker();
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      alignment: Alignment.center,
+      children: [
+        // Pulse ring
+        Container(
+          width: 56,
+          height: 56,
+          decoration: BoxDecoration(
+            color: const Color(0xFF1565C0).withOpacity(0.15),
+            shape: BoxShape.circle,
+          ),
+        ),
+        // Inner dot
+        Container(
+          width: 36,
+          height: 36,
+          decoration: BoxDecoration(
+            color: const Color(0xFF1565C0),
+            shape: BoxShape.circle,
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFF1565C0).withOpacity(0.4),
+                blurRadius: 8,
+                spreadRadius: 2,
+              ),
+            ],
+          ),
+          child: const Icon(Icons.person, color: Colors.white, size: 20),
+        ),
+      ],
     );
   }
 }
