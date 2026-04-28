@@ -180,7 +180,7 @@ class _AuthScreenState extends State<AuthScreen>
                     ),
                     const SizedBox(height: 22),
                     const Text(
-                      'Guardian',
+                      'GuardianNako',
                       style: TextStyle(
                         fontSize: 36,
                         fontWeight: FontWeight.w900,
@@ -191,7 +191,7 @@ class _AuthScreenState extends State<AuthScreen>
                     ),
                     const SizedBox(height: 6),
                     Text(
-                      'Personal Wearable Protection',
+                      'Personal Wearable Protection Device',
                       style: TextStyle(
                         fontSize: 15,
                         color: Colors.white.withOpacity(0.85),
@@ -347,7 +347,7 @@ class _AuthScreenState extends State<AuthScreen>
           ),
           const SizedBox(height: 4),
           const Text(
-            'Sign in to monitor your wearable device',
+            'Sign in to monitor your GuardianNemo and stay connected',
             style: TextStyle(
               fontSize: 13,
               color: Color(0xFF6B7A99),
@@ -454,7 +454,7 @@ class _AuthScreenState extends State<AuthScreen>
           ),
           const SizedBox(height: 4),
           const Text(
-            'Set up Guardian and connect your wearable',
+            'Set up GuardianNako and connect your GuardianNemo',
             style: TextStyle(
               fontSize: 13,
               color: Color(0xFF6B7A99),
