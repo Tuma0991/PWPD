@@ -83,7 +83,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 _NavItem(
                   icon: Icons.sensors_outlined,
                   activeIcon: Icons.sensors,
-                  label: 'Sensors',
+                  label: 'Fall',
                   index: 2,
                   currentIndex: _currentIndex,
                   onTap: (i) => setState(() => _currentIndex = i),
@@ -475,8 +475,8 @@ class _DashboardTabState extends State<_DashboardTab> {
                                     children: [
                                       Text(
                                         isSOSButton
-                                            ? '🚨 SOS ALERT!'
-                                            : '⚠️ FALL DETECTED',
+                                            ? 'SOS ALERT!'
+                                            : 'FALL DETECTED',
                                         style: const TextStyle(
                                           color: Colors.white,
                                           fontWeight: FontWeight.w900,
