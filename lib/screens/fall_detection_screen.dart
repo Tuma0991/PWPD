@@ -106,9 +106,9 @@ class FallDetectionScreen extends StatelessWidget {
                         Text(
                           isFall
                               ? (isSOSButton
-                                  ? '🚨 SOS ALERT!'
-                                  : '⚠️ FALL DETECTED!')
-                              : '✅ Normal Activity',
+                                  ? 'SOS ALERT!'
+                                  : 'FALL DETECTED!')
+                              : 'Normal Activity',
                           style: const TextStyle(
                             color: Colors.white,
                             fontSize: 24,
@@ -174,7 +174,7 @@ class FallDetectionScreen extends StatelessWidget {
                       children: [
                         // ─── Accelerometer Data ────────────────────────
                         const Text(
-                          'Accelerometer Readings',
+                          'Motion Sensor Readings',
                           style: TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.w800,
@@ -183,7 +183,7 @@ class FallDetectionScreen extends StatelessWidget {
                         ),
                         const SizedBox(height: 4),
                         const Text(
-                          'Real-time movement data from MPU6050 sensor',
+                          'Real-time movement data from motion sensor',
                           style: TextStyle(
                               fontSize: 12, color: Color(0xFF6B7A99)),
                         ),
@@ -280,7 +280,7 @@ class FallDetectionScreen extends StatelessWidget {
                               const _InfoRow(
                                   icon: Icons.sensors,
                                   text:
-                                      'The MPU6050 accelerometer on the ESP32 continuously measures movement on 3 axes.'),
+                                      'The motion sensor on the device continuously measures movement on 3 axes.'),
                               const SizedBox(height: 10),
                               const _InfoRow(
                                   icon: Icons.compare_arrows,
@@ -290,7 +290,7 @@ class FallDetectionScreen extends StatelessWidget {
                               const _InfoRow(
                                   icon: Icons.cloud_upload_outlined,
                                   text:
-                                      'The ESP32 sends this event to Firebase, and your app receives it instantly.'),
+                                      'The device sends this event to Firebase, and your app receives it instantly.'),
                             ],
                           ),
                         ),

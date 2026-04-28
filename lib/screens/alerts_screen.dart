@@ -75,7 +75,7 @@ class _AlertsScreenState extends State<AlertsScreen> {
         'type': isSOSButton ? 'sos' : 'fall',
         'message': isSOSButton
             ? 'Emergency SOS button pressed'
-            : 'Fall detected by ESP32 device',
+            : 'Fall detected on device',
         'deviceId': widget.deviceId,
         'reason': emergencyReason,
       });

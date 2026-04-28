@@ -226,7 +226,7 @@ class _DashboardTabState extends State<_DashboardTab> {
             const Icon(Icons.shield, color: Colors.white, size: 22),
             const SizedBox(width: 8),
             const Text(
-              'Guardian',
+              'GuardianNako Dashboard',
               style: TextStyle(
                 color: Colors.white,
                 fontWeight: FontWeight.w800,
@@ -351,7 +351,7 @@ class _DashboardTabState extends State<_DashboardTab> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              'Hello, ${user?.displayName?.split(' ').first ?? 'User'} 👋',
+                              'Hello, ${user?.displayName?.split(' ').first ?? 'User'} ',
                               style: const TextStyle(
                                 fontSize: 22,
                                 fontWeight: FontWeight.w800,
@@ -546,7 +546,7 @@ class _DashboardTabState extends State<_DashboardTab> {
                           Expanded(
                             child: _StatusCard(
                               icon: Icons.sensors,
-                              label: 'Accelerometer',
+                              label: 'Movement',
                               value: data != null
                                   ? 'X:${data.accelX.toStringAsFixed(1)}\nY:${data.accelY.toStringAsFixed(1)}'
                                   : '---',
@@ -562,7 +562,7 @@ class _DashboardTabState extends State<_DashboardTab> {
                           Expanded(
                             child: _StatusCard(
                               icon: Icons.personal_injury_outlined,
-                              label: 'Fall Status',
+                              label: 'Movement Status',
                               value: data?.fallDetected == true
                                   ? 'FALL\nDETECTED!'
                                   : 'Normal',
@@ -576,7 +576,7 @@ class _DashboardTabState extends State<_DashboardTab> {
                           Expanded(
                             child: _StatusCard(
                               icon: Icons.wifi,
-                              label: 'Connection',
+                              label: 'Device Connectivity',
                               value: isOnline ? 'Connected' : 'Disconnected',
                               color: isOnline
                                   ? const Color(0xFF2E7D32)
@@ -602,7 +602,7 @@ class _DashboardTabState extends State<_DashboardTab> {
                       _InfoTile(
                         icon: Icons.sensors,
                         title: 'Fall Detection',
-                        subtitle: 'MPU6050 sensor monitors movement 24/7',
+                        subtitle: 'A sensor monitors movement 24/7',
                         color: const Color(0xFF1565C0),
                       ),
                       const SizedBox(height: 8),
