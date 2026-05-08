@@ -27,8 +27,8 @@
 #include <ArduinoJson.h>
 
 // ─── WiFi & Firebase Config ───────────────────────────────────────────────────
-#define WIFI_SSID       "GlobeAtHome_f4850"
-#define WIFI_PASSWORD   "pd6fpWbj"
+#define WIFI_SSID       "GFiber_383D8"
+#define WIFI_PASSWORD   "shane0125B"
 #define FIREBASE_HOST   "https://pwpd-5e580-default-rtdb.firebaseio.com"
 #define FIREBASE_AUTH   "sr2NtPXykxRmnrVuYu4ilmFodKHDkLNHKRFe3AwG"
 #define DEVICE_ID       "esp32_device_1"

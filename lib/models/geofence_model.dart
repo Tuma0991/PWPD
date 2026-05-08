@@ -1,12 +1,12 @@
 // lib/models/geofence_model.dart
 
+import 'package:latlong2/latlong.dart';
+
 class GeofenceModel {
   final String id;
   final String userId;
   final String name;
-  final double latitude;
-  final double longitude;
-  final double radiusMeters;
+  final List<LatLng> vertices;
   final bool enabled;
   final DateTime createdAt;
   final DateTime? updatedAt;
@@ -15,9 +15,7 @@ class GeofenceModel {
     required this.id,
     required this.userId,
     required this.name,
-    required this.latitude,
-    required this.longitude,
-    required this.radiusMeters,
+    required this.vertices,
     required this.enabled,
     required this.createdAt,
     this.updatedAt,
@@ -28,9 +26,9 @@ class GeofenceModel {
     return {
       'userId': userId,
       'name': name,
-      'latitude': latitude,
-      'longitude': longitude,
-      'radiusMeters': radiusMeters,
+      'vertices': vertices
+          .map((v) => {'lat': v.latitude, 'lng': v.longitude})
+          .toList(),
       'enabled': enabled,
       'createdAt': createdAt,
       'updatedAt': updatedAt ?? createdAt,
@@ -39,13 +37,20 @@ class GeofenceModel {
 
   /// Create model from Firestore map
   static GeofenceModel fromMap(String id, Map<String, dynamic> map) {
+    final verticesList = map['vertices'] as List? ?? [];
+    final vertices = verticesList.map((v) {
+      final vertex = Map<String, dynamic>.from(v);
+      return LatLng(
+        (vertex['lat'] ?? 0).toDouble(),
+        (vertex['lng'] ?? 0).toDouble(),
+      );
+    }).toList();
+
     return GeofenceModel(
       id: id,
       userId: map['userId'] ?? '',
       name: map['name'] ?? 'Unknown Zone',
-      latitude: (map['latitude'] ?? 0).toDouble(),
-      longitude: (map['longitude'] ?? 0).toDouble(),
-      radiusMeters: (map['radiusMeters'] ?? 500).toDouble(),
+      vertices: vertices,
       enabled: map['enabled'] ?? true,
       createdAt: map['createdAt'] != null
           ? (map['createdAt'] as dynamic).toDate()
@@ -56,14 +61,11 @@ class GeofenceModel {
     );
   }
 
-  /// Copy with method
   GeofenceModel copyWith({
     String? id,
     String? userId,
     String? name,
-    double? latitude,
-    double? longitude,
-    double? radiusMeters,
+    List<LatLng>? vertices,
     bool? enabled,
     DateTime? createdAt,
     DateTime? updatedAt,
@@ -72,9 +74,7 @@ class GeofenceModel {
       id: id ?? this.id,
       userId: userId ?? this.userId,
       name: name ?? this.name,
-      latitude: latitude ?? this.latitude,
-      longitude: longitude ?? this.longitude,
-      radiusMeters: radiusMeters ?? this.radiusMeters,
+      vertices: vertices ?? this.vertices,
       enabled: enabled ?? this.enabled,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
@@ -83,5 +83,5 @@ class GeofenceModel {
 
   @override
   String toString() =>
-      'GeofenceModel(id: $id, name: $name, lat: $latitude, lng: $longitude, radius: $radiusMeters m, enabled: $enabled)';
+      'GeofenceModel(id: $id, name: $name, vertices: ${vertices.length}, enabled: $enabled)';
 }

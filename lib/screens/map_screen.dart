@@ -28,7 +28,7 @@ class _MapScreenState extends State<MapScreen> {
 
   StreamSubscription<DeviceData>? _dataSub;
 
-  static const LatLng _defaultCenter = LatLng(10.0, 123.0); // fallback
+  static const LatLng _defaultCenter = LatLng(10.0989, 122.8708); // Himamaylan City, Negros Occidental
 
   /// ESP32 sends near-zero coords (e.g. 0.033, 0.300) when GPS has no fix.
   /// Only treat as real if at least one axis is outside a ±0.5° dead-zone.
@@ -141,7 +141,7 @@ class _MapScreenState extends State<MapScreen> {
             mapController: _mapController,
             options: MapOptions(
               initialCenter: center,
-              initialZoom: hasLocation ? 15.0 : 5.0,
+              initialZoom: hasLocation ? 15.0 : 14.0,
               interactionOptions: const InteractionOptions(
                 flags: InteractiveFlag.all,
               ),

@@ -21,13 +21,16 @@ class GeofenceScreen extends StatefulWidget {
 }
 
 class _GeofenceScreenState extends State<GeofenceScreen> {
-  final firebase = FirebaseService();
+  final FirebaseService _firebase = FirebaseService();
   final MapController _mapController = MapController();
-  
-  LatLng? _currentFenceCenter;
-  double _currentFenceRadius = 500;
-  bool _isCreatingFence = false;
+
+  // ─── Drawing state ──────────────────────────────────────────────────────────
+  bool _isDrawing = false;
+  List<LatLng> _vertices = [];
   String _fenceName = '';
+  GeofenceModel? _editingGeofence;
+
+  static const LatLng _defaultCenter = LatLng(10.0989, 122.8708);
 
   @override
   Widget build(BuildContext context) {
@@ -55,13 +58,19 @@ class _GeofenceScreenState extends State<GeofenceScreen> {
       appBar: AppBar(
         backgroundColor: const Color(0xFF1565C0),
         elevation: 0,
-        title: const Row(
+        title: Row(
           children: [
-            Icon(Icons.location_on, color: Colors.white, size: 20),
-            SizedBox(width: 8),
+            Icon(
+              _isDrawing ? Icons.edit_location_alt : Icons.location_on,
+              color: Colors.white,
+              size: 20,
+            ),
+            const SizedBox(width: 8),
             Text(
-              'Geofences',
-              style: TextStyle(
+              _isDrawing
+                  ? (_editingGeofence != null ? 'Edit Polygon' : 'Draw Polygon')
+                  : 'Geofences',
+              style: const TextStyle(
                 color: Colors.white,
                 fontWeight: FontWeight.w800,
                 fontSize: 18,
@@ -69,9 +78,15 @@ class _GeofenceScreenState extends State<GeofenceScreen> {
             ),
           ],
         ),
+        leading: _isDrawing
+            ? IconButton(
+                icon: const Icon(Icons.close, color: Colors.white),
+                onPressed: _cancelDrawing,
+              )
+            : null,
       ),
       body: StreamBuilder<List<GeofenceModel>>(
-        stream: firebase.getGeofences(widget.userId),
+        stream: _firebase.getGeofences(widget.userId),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
@@ -87,10 +102,10 @@ class _GeofenceScreenState extends State<GeofenceScreen> {
                     const Icon(Icons.error_outline,
                         size: 48, color: Color(0xFFE53935)),
                     const SizedBox(height: 16),
-                    Text(
-                      'Error loading geofences',
-                      style: Theme.of(context).textTheme.titleMedium,
-                    ),
+                    const Text('Error loading geofences',
+                        style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFF1A2340))),
                     const SizedBox(height: 8),
                     Text(
                       snapshot.error.toString(),
@@ -106,139 +121,258 @@ class _GeofenceScreenState extends State<GeofenceScreen> {
 
           final geofences = snapshot.data ?? [];
 
+          // Move camera to polygon when editing
+          if (_isDrawing && _vertices.isNotEmpty && !_hasMovedToPolygon) {
+            _hasMovedToPolygon = true;
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              _fitMapToVertices();
+            });
+          }
+
           return Column(
             children: [
-              // Map hint bar
-              if (_isCreatingFence && _currentFenceCenter == null)
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                  color: const Color(0xFF1565C0),
-                  child: const Row(
-                    children: [
-                      Icon(Icons.touch_app, color: Colors.white70, size: 16),
-                      SizedBox(width: 8),
-                      Text(
-                        'Tap on the map to place your geofence center',
-                        style: TextStyle(
-                            color: Colors.white70,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w500),
-                      ),
-                    ],
-                  ),
-                ),
+              // ── Hint bar ──────────────────────────────────────────────
+              if (_isDrawing)
+                _buildDrawingHint(),
 
+              // ── Map ───────────────────────────────────────────────────
               Expanded(
-                flex: 2,
+                flex: _isDrawing ? 3 : 2,
                 child: FlutterMap(
                   mapController: _mapController,
                   options: MapOptions(
-                    initialCenter: const LatLng(0, 0),
-                    initialZoom: 13,
-                    onTap: (tapPosition, point) {
-                      if (_isCreatingFence) {
-                        setState(() => _currentFenceCenter = point);
-                      }
-                    },
+                    initialCenter: _defaultCenter,
+                    initialZoom: 15,
+                    onTap: _isDrawing
+                        ? (tapPosition, point) {
+                            setState(() => _vertices.add(point));
+                          }
+                        : null,
                   ),
                   children: [
                     TileLayer(
                       urlTemplate:
                           'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                       userAgentPackageName: 'com.pwpd.application',
+                      additionalOptions: const {
+                        'User-Agent': 'pwpd/1.0 (Flutter; Android)',
+                      },
                     ),
-                    CircleLayer(
-                      circles: [
-                        for (final geofence in geofences)
-                          CircleMarker(
-                            point: LatLng(geofence.latitude, geofence.longitude),
-                            radius: 6,
-                            useRadiusInMeter: false,
-                            color: geofence.enabled
-                                ? const Color(0xFF1565C0).withOpacity(0.3)
-                                : Colors.grey.withOpacity(0.2),
-                            borderStrokeWidth: 2,
-                            borderColor: geofence.enabled
-                                ? const Color(0xFF1565C0)
-                                : Colors.grey,
-                          ),
-                      ],
-                    ),
-                    CircleLayer(
-                      circles: [
-                        for (final geofence in geofences)
-                          CircleMarker(
-                            point: LatLng(geofence.latitude, geofence.longitude),
-                            radius: geofence.radiusMeters,
-                            useRadiusInMeter: true,
-                            color: geofence.enabled
-                                ? const Color(0xFF1565C0).withOpacity(0.1)
-                                : Colors.grey.withOpacity(0.1),
-                            borderStrokeWidth: 1.5,
-                            borderColor: geofence.enabled
-                                ? const Color(0xFF1565C0).withOpacity(0.6)
-                                : Colors.grey.withOpacity(0.4),
-                          ),
-                      ],
-                    ),
-                    if (_isCreatingFence && _currentFenceCenter != null)
-                      CircleLayer(
-                        circles: [
-                          CircleMarker(
-                            point: _currentFenceCenter!,
-                            radius: _currentFenceRadius,
-                            useRadiusInMeter: true,
-                            color: const Color(0xFF1565C0).withOpacity(0.15),
-                            borderStrokeWidth: 2,
+
+                    // ── Saved geofence polygons (view mode) ─────────
+                    if (!_isDrawing)
+                      PolygonLayer(
+                        polygons: [
+                          for (final gf in geofences)
+                            if (gf.vertices.length >= 3)
+                              Polygon(
+                                points: [...gf.vertices, gf.vertices.first],
+                                color: gf.enabled
+                                    ? const Color(0xFF1565C0).withOpacity(0.1)
+                                    : Colors.grey.withOpacity(0.05),
+                                borderColor: gf.enabled
+                                    ? const Color(0xFF1565C0)
+                                    : Colors.grey,
+                                borderStrokeWidth: gf.enabled ? 2.0 : 1.0,
+                                isFilled: true,
+                              ),
+                        ],
+                      ),
+
+                    // ── Drawing polygon ──────────────────────────────
+                    if (_isDrawing && _vertices.isNotEmpty)
+                      MarkerLayer(
+                        markers: _vertices.asMap().entries.map((entry) {
+                          return Marker(
+                            point: entry.value,
+                            width: 28,
+                            height: 28,
+                            child: Container(
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF1565C0),
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                    color: Colors.white, width: 2),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withOpacity(0.3),
+                                    blurRadius: 4,
+                                    offset: const Offset(0, 2),
+                                  ),
+                                ],
+                              ),
+                              child: Center(
+                                child: Text(
+                                  '${entry.key + 1}',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          );
+                        }).toList(),
+                      ),
+
+                    // ── Polygon fill (3+ vertices) ──────────────────
+                    if (_isDrawing && _vertices.length >= 3)
+                      PolygonLayer(
+                        polygons: [
+                          Polygon(
+                            points: [..._vertices, _vertices.first],
+                            color: const Color(0xFF1565C0).withOpacity(0.10),
                             borderColor: const Color(0xFF1565C0),
+                            borderStrokeWidth: 2.5,
+                            isFilled: true,
                           ),
-                          CircleMarker(
-                            point: _currentFenceCenter!,
-                            radius: 8,
-                            useRadiusInMeter: false,
+                        ],
+                      ),
+
+                    // ── Connecting lines ───────────────────────────────
+                    if (_isDrawing && _vertices.length >= 2)
+                      PolylineLayer(
+                        polylines: [
+                          Polyline(
+                            points: [
+                              ..._vertices,
+                              if (_vertices.length >= 3) _vertices.first,
+                            ],
                             color: const Color(0xFF1565C0),
-                            borderStrokeWidth: 0,
+                            strokeWidth: 2.5,
                           ),
                         ],
                       ),
                   ],
                 ),
               ),
+
+              // ── Bottom panel ──────────────────────────────────────────
               Expanded(
                 flex: 1,
-                child: _isCreatingFence && _currentFenceCenter != null
-                    ? _buildCreationPanel()
+                child: _isDrawing
+                    ? _buildDrawingPanel()
                     : _buildGeofenceList(geofences),
               ),
             ],
           );
         },
       ),
-      floatingActionButton: !_isCreatingFence
-          ? FloatingActionButton.extended(
-              onPressed: () => setState(() {
-                _isCreatingFence = true;
-                _currentFenceCenter = null;
-                _currentFenceRadius = 500;
-                _fenceName = '';
-              }),
+      floatingActionButton: _isDrawing
+          ? null
+          : FloatingActionButton.extended(
+              onPressed: () => _startDrawing(),
               backgroundColor: const Color(0xFF1565C0),
               elevation: 4,
               icon: const Icon(Icons.add_location_alt, color: Colors.white),
               label: const Text(
-                'Add Fence',
+                'Add Polygon',
                 style: TextStyle(
                     color: Colors.white,
                     fontWeight: FontWeight.w700,
                     fontSize: 14),
               ),
-            )
-          : null,
+            ),
     );
   }
 
-  Widget _buildCreationPanel() {
+  // ─── Drawing helpers ────────────────────────────────────────────────────────
+
+  bool _hasMovedToPolygon = false;
+
+  void _startDrawing() {
+    setState(() {
+      _isDrawing = true;
+      _editingGeofence = null;
+      _vertices = [];
+      _fenceName = '';
+      _hasMovedToPolygon = false;
+    });
+  }
+
+  void _cancelDrawing() {
+    setState(() {
+      _isDrawing = false;
+      _editingGeofence = null;
+      _vertices = [];
+      _fenceName = '';
+      _hasMovedToPolygon = false;
+    });
+  }
+
+  void _undoLastVertex() {
+    setState(() {
+      if (_vertices.isNotEmpty) {
+        _vertices = [..._vertices]..removeLast();
+      }
+    });
+  }
+
+  void _clearAllVertices() {
+    setState(() {
+      _vertices = [];
+      _hasMovedToPolygon = false;
+    });
+  }
+
+  void _fitMapToVertices() {
+    if (_vertices.isEmpty) return;
+    if (_vertices.length == 1) {
+      _mapController.move(_vertices.first, 17);
+      return;
+    }
+    final bounds = LatLngBounds.fromPoints(_vertices);
+    try {
+      _mapController.fitCamera(
+        CameraFit.bounds(
+          bounds: bounds,
+          padding: const EdgeInsets.all(60),
+        ),
+      );
+    } catch (_) {
+      _mapController.move(_vertices.first, 16);
+    }
+  }
+
+  Widget _buildDrawingHint() {
+    final count = _vertices.length;
+    String text;
+    if (count == 0) {
+      text = 'Tap on the map to place your first vertex';
+    } else if (count < 3) {
+      text = 'Place ${3 - count} more point${3 - count > 1 ? 's' : ''} to form a polygon';
+    } else {
+      text = '$count points — tap to add more or save your polygon';
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      color: const Color(0xFF1565C0),
+      child: Row(
+        children: [
+          const Icon(Icons.touch_app, color: Colors.white70, size: 16),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              text,
+              style: const TextStyle(
+                color: Colors.white70,
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ─── Drawing panel (bottom sheet area) ──────────────────────────────────────
+
+  Widget _buildDrawingPanel() {
+    final canSave = _fenceName.isNotEmpty && _vertices.length >= 3;
+
     return Container(
       decoration: const BoxDecoration(
         color: Colors.white,
@@ -252,7 +386,7 @@ class _GeofenceScreenState extends State<GeofenceScreen> {
         ],
       ),
       child: SingleChildScrollView(
-        padding: const EdgeInsets.all(18),
+        padding: const EdgeInsets.all(16),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -262,13 +396,15 @@ class _GeofenceScreenState extends State<GeofenceScreen> {
               child: Container(
                 width: 36,
                 height: 4,
-                margin: const EdgeInsets.only(bottom: 14),
+                margin: const EdgeInsets.only(bottom: 12),
                 decoration: BoxDecoration(
                   color: const Color(0xFFDDE3F0),
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
             ),
+
+            // Title
             Row(
               children: [
                 Container(
@@ -277,13 +413,18 @@ class _GeofenceScreenState extends State<GeofenceScreen> {
                     color: const Color(0xFF1565C0).withOpacity(0.10),
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  child: const Icon(Icons.add_location_alt,
-                      color: Color(0xFF1565C0), size: 18),
+                  child: Icon(
+                    _editingGeofence != null
+                        ? Icons.edit_location_alt
+                        : Icons.add_location_alt,
+                    color: const Color(0xFF1565C0),
+                    size: 18,
+                  ),
                 ),
                 const SizedBox(width: 10),
-                const Text(
-                  'New Geofence',
-                  style: TextStyle(
+                Text(
+                  _editingGeofence != null ? 'Edit Polygon' : 'New Polygon',
+                  style: const TextStyle(
                     fontWeight: FontWeight.w800,
                     color: Color(0xFF1A2340),
                     fontSize: 16,
@@ -291,7 +432,9 @@ class _GeofenceScreenState extends State<GeofenceScreen> {
                 ),
               ],
             ),
-            const SizedBox(height: 14),
+            const SizedBox(height: 12),
+
+            // Name field
             TextFormField(
               initialValue: _fenceName,
               style: const TextStyle(
@@ -299,11 +442,11 @@ class _GeofenceScreenState extends State<GeofenceScreen> {
                   fontWeight: FontWeight.w500,
                   color: Color(0xFF1A2340)),
               decoration: InputDecoration(
-                labelText: 'Fence Name',
-                hintText: 'Home, School, Office...',
-                labelStyle:
-                    const TextStyle(color: Color(0xFF6B7A99), fontSize: 13),
-                prefixIcon: const Icon(Icons.location_on,
+                labelText: 'Polygon Name',
+                hintText: 'Home, School, Park...',
+                labelStyle: const TextStyle(
+                    color: Color(0xFF6B7A99), fontSize: 13),
+                prefixIcon: const Icon(Icons.label_outline,
                     color: Color(0xFF1565C0), size: 20),
                 filled: true,
                 fillColor: const Color(0xFFF7F9FF),
@@ -322,93 +465,156 @@ class _GeofenceScreenState extends State<GeofenceScreen> {
               ),
               onChanged: (name) => _fenceName = name,
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 10),
+
+            // Vertex count
             Container(
-              padding: const EdgeInsets.all(12),
+              padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
-                color: const Color(0xFFF0F4FF),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                    color: const Color(0xFF1565C0).withOpacity(0.2)),
+                color: _vertices.length >= 3
+                    ? const Color(0xFFE8F5E9)
+                    : const Color(0xFFFFF3E0),
+                borderRadius: BorderRadius.circular(10),
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.pin_drop,
-                      size: 16, color: Color(0xFF1565C0)),
+                  Icon(
+                    _vertices.length >= 3
+                        ? Icons.check_circle
+                        : Icons.info_outline,
+                    size: 18,
+                    color: _vertices.length >= 3
+                        ? const Color(0xFF2E7D32)
+                        : const Color(0xFFF57C00),
+                  ),
                   const SizedBox(width: 8),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Selected Location',
-                        style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600,
-                            color: Color(0xFF6B7A99)),
-                      ),
-                      Text(
-                        '${_currentFenceCenter!.latitude.toStringAsFixed(5)}°, ${_currentFenceCenter!.longitude.toStringAsFixed(5)}°',
-                        style: const TextStyle(
-                          fontSize: 12,
-                          fontFamily: 'monospace',
-                          fontWeight: FontWeight.w600,
-                          color: Color(0xFF1565C0),
-                        ),
-                      ),
-                    ],
+                  Text(
+                    _vertices.length >= 3
+                        ? '${_vertices.length} vertices — polygon valid'
+                        : '${_vertices.length} of 3 minimum vertices placed',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: _vertices.length >= 3
+                          ? const Color(0xFF2E7D32)
+                          : const Color(0xFFF57C00),
+                    ),
                   ),
                 ],
               ),
             ),
+
+            // Vertex list (scrollable if many)
+            if (_vertices.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              SizedBox(
+                height: 80,
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: _vertices.length,
+                  separatorBuilder: (_, __) => const SizedBox(width: 8),
+                  itemBuilder: (context, index) {
+                    final v = _vertices[index];
+                    return Container(
+                      width: 100,
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF0F4FF),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                          color: const Color(0xFF1565C0).withOpacity(0.2),
+                        ),
+                      ),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(
+                            'Point ${index + 1}',
+                            style: const TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w700,
+                              color: Color(0xFF1565C0),
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            '${v.latitude.toStringAsFixed(4)}°',
+                            style: const TextStyle(
+                              fontSize: 9, fontFamily: 'monospace'),
+                          ),
+                          Text(
+                            '${v.longitude.toStringAsFixed(4)}°',
+                            style: const TextStyle(
+                              fontSize: 9, fontFamily: 'monospace'),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+
             const SizedBox(height: 12),
+
+            // Action buttons
             Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text(
-                  'Radius',
-                  style: TextStyle(
-                    fontWeight: FontWeight.w700,
-                    color: Color(0xFF1A2340),
-                    fontSize: 13,
+                // Undo last
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed:
+                        _vertices.isEmpty ? null : _undoLastVertex,
+                    style: OutlinedButton.styleFrom(
+                      side: const BorderSide(color: Color(0xFFDDE3F0)),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12)),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                    icon: const Icon(Icons.undo, size: 16,
+                        color: Color(0xFF6B7A99)),
+                    label: const Text(
+                      'Undo',
+                      style: TextStyle(
+                        color: Color(0xFF6B7A99),
+                        fontWeight: FontWeight.w600,
+                        fontSize: 12,
+                      ),
+                    ),
                   ),
                 ),
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF1565C0).withOpacity(0.10),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Text(
-                    '${_currentFenceRadius.toInt()}m',
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w700,
-                      color: Color(0xFF1565C0),
-                      fontSize: 13,
+                const SizedBox(width: 8),
+                // Clear all
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed:
+                        _vertices.isEmpty ? null : _clearAllVertices,
+                    style: OutlinedButton.styleFrom(
+                      side: const BorderSide(color: Color(0xFFDDE3F0)),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12)),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                    icon: const Icon(Icons.delete_outline, size: 16,
+                        color: Color(0xFFE53935)),
+                    label: const Text(
+                      'Clear',
+                      style: TextStyle(
+                        color: Color(0xFFE53935),
+                        fontWeight: FontWeight.w600,
+                        fontSize: 12,
+                      ),
                     ),
                   ),
                 ),
               ],
             ),
-            Slider(
-              value: _currentFenceRadius,
-              min: 100,
-              max: 5000,
-              divisions: 49,
-              activeColor: const Color(0xFF1565C0),
-              label: '${_currentFenceRadius.toInt()}m',
-              onChanged: (value) => setState(() => _currentFenceRadius = value),
-            ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 8),
             Row(
               children: [
                 Expanded(
                   child: OutlinedButton(
-                    onPressed: () => setState(() {
-                      _isCreatingFence = false;
-                      _currentFenceCenter = null;
-                      _fenceName = '';
-                    }),
+                    onPressed: _cancelDrawing,
                     style: OutlinedButton.styleFrom(
                       side: const BorderSide(color: Color(0xFFDDE3F0)),
                       shape: RoundedRectangleBorder(
@@ -418,17 +624,16 @@ class _GeofenceScreenState extends State<GeofenceScreen> {
                     child: const Text(
                       'Cancel',
                       style: TextStyle(
-                          color: Color(0xFF6B7A99),
-                          fontWeight: FontWeight.w700),
+                        color: Color(0xFF6B7A99),
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                   ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: ElevatedButton(
-                    onPressed: _fenceName.isEmpty || _currentFenceCenter == null
-                        ? null
-                        : () => _saveFence(),
+                    onPressed: canSave ? _savePolygon : null,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF1565C0),
                       foregroundColor: Colors.white,
@@ -437,9 +642,11 @@ class _GeofenceScreenState extends State<GeofenceScreen> {
                           borderRadius: BorderRadius.circular(12)),
                       padding: const EdgeInsets.symmetric(vertical: 13),
                     ),
-                    child: const Text(
-                      'Save Fence',
-                      style: TextStyle(fontWeight: FontWeight.w700),
+                    child: Text(
+                      _editingGeofence != null
+                          ? 'Update Polygon'
+                          : 'Save Polygon',
+                      style: const TextStyle(fontWeight: FontWeight.w700),
                     ),
                   ),
                 ),
@@ -450,6 +657,8 @@ class _GeofenceScreenState extends State<GeofenceScreen> {
       ),
     );
   }
+
+  // ─── Geofence list (view mode) ──────────────────────────────────────────────
 
   Widget _buildGeofenceList(List<GeofenceModel> geofences) {
     if (geofences.isEmpty) {
@@ -485,7 +694,7 @@ class _GeofenceScreenState extends State<GeofenceScreen> {
               ),
               const SizedBox(height: 6),
               const Text(
-                'Tap "Add Fence" to create a safe zone',
+                'Tap "Add Polygon" to draw a custom zone',
                 style: TextStyle(fontSize: 13, color: Color(0xFF6B7A99)),
               ),
             ],
@@ -554,37 +763,48 @@ class _GeofenceScreenState extends State<GeofenceScreen> {
     );
   }
 
-  Future<void> _saveFence() async {
-    if (_currentFenceCenter == null || _fenceName.isEmpty) return;
+  // ─── Save / Edit / Delete / Toggle ──────────────────────────────────────────
+
+  Future<void> _savePolygon() async {
+    if (_vertices.length < 3 || _fenceName.isEmpty) return;
 
     try {
-      final geofence = GeofenceModel(
-        id: DateTime.now().millisecondsSinceEpoch.toString(),
-        userId: widget.userId,
-        name: _fenceName,
-        latitude: _currentFenceCenter!.latitude,
-        longitude: _currentFenceCenter!.longitude,
-        radiusMeters: _currentFenceRadius,
-        enabled: true,
-        createdAt: DateTime.now(),
-        updatedAt: DateTime.now(),
-      );
+      if (_editingGeofence != null) {
+        // Update existing
+        final updated = _editingGeofence!.copyWith(
+          name: _fenceName,
+          vertices: List.from(_vertices),
+          updatedAt: DateTime.now(),
+        );
+        await _firebase.updateGeofence(
+            widget.userId, _editingGeofence!.id, updated);
+      } else {
+        // Create new
+        final geofence = GeofenceModel(
+          id: DateTime.now().millisecondsSinceEpoch.toString(),
+          userId: widget.userId,
+          name: _fenceName,
+          vertices: List.from(_vertices),
+          enabled: true,
+          createdAt: DateTime.now(),
+          updatedAt: DateTime.now(),
+        );
+        await _firebase.addGeofence(widget.userId, geofence);
+      }
 
-      await firebase.addGeofence(widget.userId, geofence);
-      final geofences = await firebase.getGeofences(widget.userId).first;
-      await firebase.syncGeofencesToDevice(widget.deviceId, geofences);
+      // Sync to device
+      final geofences =
+          await _firebase.getGeofences(widget.userId).first;
+      await _firebase.syncGeofencesToDevice(widget.deviceId, geofences);
 
-      setState(() {
-        _isCreatingFence = false;
-        _currentFenceCenter = null;
-        _fenceName = '';
-        _currentFenceRadius = 500;
-      });
+      _cancelDrawing();
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: const Text('Geofence created successfully!'),
+            content: Text(_editingGeofence != null
+                ? 'Polygon updated successfully!'
+                : 'Polygon created successfully!'),
             backgroundColor: const Color(0xFF2E7D32),
             shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12)),
@@ -602,23 +822,23 @@ class _GeofenceScreenState extends State<GeofenceScreen> {
     }
   }
 
-  Future<void> _editGeofence(GeofenceModel geofence) async {
+  void _editGeofence(GeofenceModel geofence) {
     setState(() {
-      _isCreatingFence = true;
-      _currentFenceCenter = LatLng(geofence.latitude, geofence.longitude);
-      _currentFenceRadius = geofence.radiusMeters;
+      _isDrawing = true;
+      _editingGeofence = geofence;
+      _vertices = List.from(geofence.vertices);
       _fenceName = geofence.name;
+      _hasMovedToPolygon = false;
     });
-
-    _mapController.move(_currentFenceCenter!, 15);
   }
 
   void _showDeleteDialog(GeofenceModel geofence) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text('Delete Geofence',
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20)),
+        title: const Text('Delete Polygon',
             style: TextStyle(fontWeight: FontWeight.w800)),
         content: Text('Delete "${geofence.name}"? This cannot be undone.'),
         actions: [
@@ -647,9 +867,11 @@ class _GeofenceScreenState extends State<GeofenceScreen> {
   Future<void> _toggleGeofence(GeofenceModel geofence) async {
     try {
       final updated = geofence.copyWith(enabled: !geofence.enabled);
-      await firebase.updateGeofence(widget.userId, geofence.id, updated);
-      final geofences = await firebase.getGeofences(widget.userId).first;
-      await firebase.syncGeofencesToDevice(widget.deviceId, geofences);
+      await _firebase.updateGeofence(
+          widget.userId, geofence.id, updated);
+      final geofences =
+          await _firebase.getGeofences(widget.userId).first;
+      await _firebase.syncGeofencesToDevice(widget.deviceId, geofences);
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -661,9 +883,10 @@ class _GeofenceScreenState extends State<GeofenceScreen> {
 
   Future<void> _deleteGeofence(String id) async {
     try {
-      await firebase.deleteGeofence(widget.userId, id);
-      final geofences = await firebase.getGeofences(widget.userId).first;
-      await firebase.syncGeofencesToDevice(widget.deviceId, geofences);
+      await _firebase.deleteGeofence(widget.userId, id);
+      final geofences =
+          await _firebase.getGeofences(widget.userId).first;
+      await _firebase.syncGeofencesToDevice(widget.deviceId, geofences);
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -694,6 +917,7 @@ class _GeofenceCard extends StatelessWidget {
     final color = geofence.enabled
         ? const Color(0xFF1565C0)
         : const Color(0xFF9EA8C2);
+    final vertCount = geofence.vertices.length;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
@@ -721,7 +945,7 @@ class _GeofenceCard extends StatelessWidget {
                   color: color.withOpacity(0.10),
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child: Icon(Icons.location_on, size: 18, color: color),
+                child: Icon(Icons.polyline, size: 18, color: color),
               ),
               const SizedBox(width: 10),
               Expanded(
@@ -739,7 +963,7 @@ class _GeofenceCard extends StatelessWidget {
                       ),
                     ),
                     Text(
-                      '${geofence.radiusMeters.toInt()}m radius',
+                      '$vertCount-point polygon',
                       style: TextStyle(
                         fontSize: 12,
                         color: geofence.enabled
@@ -758,6 +982,7 @@ class _GeofenceCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 10),
+          // Vertices preview
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             decoration: BoxDecoration(
@@ -766,15 +991,19 @@ class _GeofenceCard extends StatelessWidget {
             ),
             child: Row(
               children: [
-                const Icon(Icons.pin_drop,
+                const Icon(Icons.vertical_split,
                     size: 13, color: Color(0xFF1565C0)),
                 const SizedBox(width: 6),
-                Text(
-                  '${geofence.latitude.toStringAsFixed(5)}°, ${geofence.longitude.toStringAsFixed(5)}°',
-                  style: const TextStyle(
-                    fontSize: 11,
-                    fontFamily: 'monospace',
-                    color: Color(0xFF6B7A99),
+                Expanded(
+                  child: Text(
+                    _formatVerticesPreview(geofence.vertices),
+                    style: const TextStyle(
+                      fontSize: 11,
+                      fontFamily: 'monospace',
+                      color: Color(0xFF6B7A99),
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
               ],
@@ -787,8 +1016,8 @@ class _GeofenceCard extends StatelessWidget {
               TextButton.icon(
                 onPressed: onEdit,
                 style: TextButton.styleFrom(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 10, vertical: 6),
                 ),
                 icon: const Icon(Icons.edit_outlined,
                     size: 16, color: Color(0xFF1565C0)),
@@ -804,8 +1033,8 @@ class _GeofenceCard extends StatelessWidget {
               TextButton.icon(
                 onPressed: onDelete,
                 style: TextButton.styleFrom(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 10, vertical: 6),
                 ),
                 icon: const Icon(Icons.delete_outline,
                     size: 16, color: Color(0xFFE53935)),
@@ -822,5 +1051,16 @@ class _GeofenceCard extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  String _formatVerticesPreview(List<LatLng> vertices) {
+    if (vertices.isEmpty) return 'No vertices';
+    if (vertices.length <= 2) {
+      return vertices
+          .map((v) => '${v.latitude.toStringAsFixed(4)}, ${v.longitude.toStringAsFixed(4)}')
+          .join('\n');
+    }
+    final first = vertices.first;
+    return '${first.latitude.toStringAsFixed(4)}, ${first.longitude.toStringAsFixed(4)} ... +${vertices.length - 1} more';
   }
 }

@@ -100,14 +100,15 @@ class FirebaseService {
   }
 
   Future<void> logAlert(String userId, Map<String, dynamic> alertData) async {
+    // Use caller-provided timestamp if present, otherwise server timestamp
+    if (!alertData.containsKey('timestamp')) {
+      alertData['timestamp'] = FieldValue.serverTimestamp();
+    }
     await _firestore
         .collection('users')
         .doc(userId)
         .collection('alerts')
-        .add({
-      ...alertData,
-      'timestamp': FieldValue.serverTimestamp(),
-    });
+        .add(alertData);
   }
 
   // ─── CONTACTS ────────────────────────────────────────────────────────────
@@ -221,7 +222,7 @@ class FirebaseService {
     });
   }
 
-  /// Sync geofences to ESP32 device
+  /// Sync geofences to ESP32 device (polygon vertices)
   Future<void> syncGeofencesToDevice(
       String deviceId, List<GeofenceModel> geofences) async {
     final geofenceList = geofences
@@ -229,9 +230,9 @@ class FirebaseService {
         .map((g) => {
               'id': g.id,
               'name': g.name,
-              'lat': g.latitude,
-              'lng': g.longitude,
-              'radius': g.radiusMeters,
+              'vertices': g.vertices
+                  .map((v) => {'lat': v.latitude, 'lng': v.longitude})
+                  .toList(),
             })
         .toList();
 

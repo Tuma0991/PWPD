@@ -1,66 +1,83 @@
 // lib/screens/alerts_screen.dart
- 
+
 import 'dart:async';
- 
+
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import '../services/firebase_service.dart';
- 
+
 class AlertsScreen extends StatefulWidget {
   final String deviceId;
   const AlertsScreen({super.key, required this.deviceId});
- 
+
   @override
   State<AlertsScreen> createState() => _AlertsScreenState();
 }
- 
+
 class _AlertsScreenState extends State<AlertsScreen> {
   final FirebaseService _firebase = FirebaseService();
   StreamSubscription<Map<String, dynamic>>? _emergencySubscription;
   bool _previousEmergencyActive = false;
   String _previousEmergencyReason = '';
+  bool _isFirstEvent = true;
 
   DateTime? _lastSOSTime;
+  int? _lastLoggedTriggeredAt;
   static const _sosFallSuppressSeconds = 3;
- 
+
   @override
   void initState() {
     super.initState();
     _subscribeToEmergencyEvents();
   }
- 
+
   @override
   void dispose() {
     _emergencySubscription?.cancel();
     super.dispose();
   }
- 
+
   void _subscribeToEmergencyEvents() {
     _emergencySubscription =
         _firebase.listenToEmergencyAlert(widget.deviceId).listen((event) async {
+      // Skip initial snapshot — it's existing RTDB state, not a new event.
+      // Otherwise any stale active emergency is re-logged on every app start.
+      if (_isFirstEvent) {
+        _isFirstEvent = false;
+        _previousEmergencyActive = event['active'] == true;
+        _previousEmergencyReason = event['reason'] as String? ?? '';
+        return;
+      }
+
       final isEmergencyActive = event['active'] == true;
       final emergencyReason = event['reason'] as String? ?? '';
       final userId = _firebase.currentUser?.uid;
- 
+      final triggeredAt = event['triggeredAt'] as int?;
+
       if (!mounted) return;
- 
+
       final isNewEmergency = isEmergencyActive &&
           (!_previousEmergencyActive ||
               emergencyReason != _previousEmergencyReason);
- 
+
       _previousEmergencyActive = isEmergencyActive;
       _previousEmergencyReason = emergencyReason;
- 
+
       if (!isNewEmergency || userId == null || userId.isEmpty) return;
- 
+
+      // Prevent duplicate: same triggeredAt timestamp was already logged
+      if (triggeredAt != null && triggeredAt == _lastLoggedTriggeredAt) return;
+      _lastLoggedTriggeredAt = triggeredAt;
+
       final isSOSButton = emergencyReason.contains('SOS button');
       final isFall = emergencyReason.contains('Fall detected') ||
           emergencyReason.contains('accelerometer');
- 
+
       if (isSOSButton) {
         _lastSOSTime = DateTime.now();
       }
- 
+
       if (isFall && _lastSOSTime != null) {
         final secondsSinceSOS =
             DateTime.now().difference(_lastSOSTime!).inSeconds;
@@ -70,22 +87,41 @@ class _AlertsScreenState extends State<AlertsScreen> {
           return;
         }
       }
- 
-      await _firebase.logAlert(userId, {
-        'type': isSOSButton ? 'sos' : 'fall',
+
+      final alertType = isSOSButton ? 'sos' : (isFall ? 'fall' : 'emergency');
+
+      final alertData = <String, dynamic>{
+        'type': alertType,
         'message': isSOSButton
             ? 'Emergency SOS button pressed'
-            : 'Fall detected on device',
+            : isFall
+                ? 'Fall detected on device'
+                : emergencyReason,
         'deviceId': widget.deviceId,
         'reason': emergencyReason,
-      });
+      };
+
+      // Use ESP32's triggeredAt so alert time reflects when the emergency
+      // actually occurred, not when the app processed it.
+      if (triggeredAt != null && triggeredAt > 0) {
+        alertData['timestamp'] =
+            Timestamp.fromMillisecondsSinceEpoch(triggeredAt);
+      }
+
+      // Include GPS coordinates if available
+      if (event['lat'] != null) {
+        alertData['latitude'] = event['lat'];
+        alertData['longitude'] = event['lng'];
+      }
+
+      await _firebase.logAlert(userId, alertData);
     });
   }
- 
+
   @override
   Widget build(BuildContext context) {
     final userId = _firebase.currentUser?.uid ?? '';
- 
+
     return Scaffold(
       backgroundColor: const Color(0xFFF0F4FF),
       appBar: AppBar(
@@ -114,9 +150,9 @@ class _AlertsScreenState extends State<AlertsScreen> {
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return const Center(child: CircularProgressIndicator());
                 }
- 
+
                 final alerts = snapshot.data ?? [];
- 
+
                 if (alerts.isEmpty) {
                   return Center(
                     child: Column(
