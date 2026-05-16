@@ -25,13 +25,29 @@
 #include <Wire.h>
 #include <MPU6050.h>
 #include <ArduinoJson.h>
+#include <Preferences.h>
+#include <BLEDevice.h>
+#include <BLEUtils.h>
+#include <BLEServer.h>
 
-// ─── WiFi & Firebase Config ───────────────────────────────────────────────────
-#define WIFI_SSID       "GFiber_383D8"
-#define WIFI_PASSWORD   "shane0125B"
+// ─── Firebase Config ──────────────────────────────────────────────────────────
 #define FIREBASE_HOST   "https://pwpd-5e580-default-rtdb.firebaseio.com"
 #define FIREBASE_AUTH   "sr2NtPXykxRmnrVuYu4ilmFodKHDkLNHKRFe3AwG"
-#define DEVICE_ID       "esp32_device_1"
+
+// ─── BLE Provisioning UUIDs ───────────────────────────────────────────────────
+#define SERVICE_UUID              "4fafc201-1fb5-459e-8fcc-c5c9c331914b"
+#define CHAR_UUID_DEVICE_INFO     "4fafc202-1fb5-459e-8fcc-c5c9c331914b"
+#define CHAR_UUID_WIFI_CREDS      "4fafc203-1fb5-459e-8fcc-c5c9c331914b"
+#define CHAR_UUID_PROV_STATUS     "4fafc204-1fb5-459e-8fcc-c5c9c331914b"
+
+// ─── NVS Keys ─────────────────────────────────────────────────────────────────
+#define NVS_NAMESPACE           "guardian"
+#define NVS_KEY_WIFI_SSID       "wifi_ssid"
+#define NVS_KEY_WIFI_PASS       "wifi_pass"
+#define NVS_KEY_DEVICE_ID       "device_id"
+
+// ─── WiFi Connection Timeout ──────────────────────────────────────────────────
+#define WIFI_CONNECT_TIMEOUT_MS   15000
 
 // ─── Pin Config ───────────────────────────────────────────────────────────────
 #define GPS_RX_PIN      16    // ESP32 RX2
@@ -99,6 +115,153 @@ Geofence geofences[MAX_GEOFENCES];
 int geofenceCount = 0;
 bool lastGeofenceStatus[MAX_GEOFENCES] = {false};
 
+// BLE & NVS state
+Preferences preferences;
+bool provisioningMode = false;
+String deviceId = "";
+String wifiSSID = "";
+String wifiPassword = "";
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+String generateDeviceIdFromMAC() {
+  String mac = WiFi.macAddress();
+  mac.replace(":", "");
+  mac.toLowerCase();
+  return "guardian_" + mac;
+}
+
+String getShortName() {
+  String mac = WiFi.macAddress();
+  mac.replace(":", "");
+  mac.toUpperCase();
+  return "Guardian_" + mac.substring(mac.length() - 4);
+}
+
+String buildDeviceInfoJSON() {
+  StaticJsonDocument<256> doc;
+  doc["deviceId"] = deviceId;
+  doc["firmware"] = "1.0.0";
+  doc["wifiConfigured"] = (wifiSSID.length() > 0);
+  doc["wifiConnected"] = (WiFi.status() == WL_CONNECTED);
+  String json;
+  serializeJson(doc, json);
+  return json;
+}
+
+bool loadStoredConfig() {
+  preferences.begin(NVS_NAMESPACE, false);
+  wifiSSID = preferences.getString(NVS_KEY_WIFI_SSID, "");
+  wifiPassword = preferences.getString(NVS_KEY_WIFI_PASS, "");
+  deviceId = preferences.getString(NVS_KEY_DEVICE_ID, "");
+
+  if (deviceId.length() == 0) {
+    deviceId = generateDeviceIdFromMAC();
+    preferences.putString(NVS_KEY_DEVICE_ID, deviceId);
+  }
+
+  preferences.end();
+  Serial.printf("[CONFIG] Device ID: %s\n", deviceId.c_str());
+  Serial.printf("[CONFIG] Stored WiFi: %s\n", wifiSSID.length() > 0 ? wifiSSID.c_str() : "(none)");
+  return wifiSSID.length() > 0;
+}
+
+void saveWiFiCredentials(const char* ssid, const char* pass) {
+  preferences.begin(NVS_NAMESPACE, false);
+  preferences.putString(NVS_KEY_WIFI_SSID, ssid);
+  preferences.putString(NVS_KEY_WIFI_PASS, pass);
+  preferences.end();
+  wifiSSID = ssid;
+  wifiPassword = pass;
+  Serial.printf("[CONFIG] WiFi credentials saved: %s\n", ssid);
+}
+
+// ─── BLE Provisioning Callbacks ────────────────────────────────────────────
+
+class DeviceInfoCallback : public BLECharacteristicCallbacks {
+  void onRead(BLECharacteristic* pCharacteristic) {
+    String info = buildDeviceInfoJSON();
+    pCharacteristic->setValue(info.c_str());
+    Serial.printf("[BLE] Device info read: %s\n", info.c_str());
+  }
+};
+
+class WiFiCredsCallback : public BLECharacteristicCallbacks {
+  void onWrite(BLECharacteristic* pCharacteristic) {
+    String json = String(pCharacteristic->getValue().c_str());
+    Serial.printf("[BLE] WiFi creds received: %s\n", json.c_str());
+
+    StaticJsonDocument<256> doc;
+    DeserializationError err = deserializeJson(doc, json);
+
+    if (err) {
+      Serial.printf("[BLE] JSON parse error: %s\n", err.c_str());
+      return;
+    }
+
+    const char* ssid = doc["ssid"] | "";
+    const char* pass = doc["password"] | "";
+
+    if (strlen(ssid) == 0 || strlen(pass) == 0) {
+      Serial.println("[BLE] Invalid credentials - ssid or password empty");
+      return;
+    }
+
+    saveWiFiCredentials(ssid, pass);
+
+    BLECharacteristic* pStatusChar =
+        pCharacteristic->getService()->getCharacteristic(CHAR_UUID_PROV_STATUS);
+    if (pStatusChar) {
+      StaticJsonDocument<256> statusDoc;
+      statusDoc["status"] = "connected";
+      statusDoc["message"] = "WiFi credentials saved. Rebooting...";
+      String statusJson;
+      serializeJson(statusDoc, statusJson);
+      pStatusChar->setValue(statusJson.c_str());
+      pStatusChar->notify();
+      delay(500);
+    }
+
+    Serial.println("[BLE] Rebooting to apply WiFi credentials...");
+    ESP.restart();
+  }
+};
+
+void startBLEProvisioning() {
+  Serial.println("\n=== BLE Provisioning Mode ===");
+
+  BLEDevice::init(getShortName().c_str());
+  BLEServer* pServer = BLEDevice::createServer();
+  BLEService* pService = pServer->createService(SERVICE_UUID);
+
+  BLECharacteristic* pDeviceInfoChar =
+      pService->createCharacteristic(CHAR_UUID_DEVICE_INFO, BLECharacteristic::PROPERTY_READ);
+  pDeviceInfoChar->setCallbacks(new DeviceInfoCallback());
+  pDeviceInfoChar->setValue(buildDeviceInfoJSON().c_str());
+
+  BLECharacteristic* pWifiCredsChar =
+      pService->createCharacteristic(CHAR_UUID_WIFI_CREDS, BLECharacteristic::PROPERTY_WRITE);
+  pWifiCredsChar->setCallbacks(new WiFiCredsCallback());
+
+  BLECharacteristic* pProvStatusChar =
+      pService->createCharacteristic(CHAR_UUID_PROV_STATUS,
+          BLECharacteristic::PROPERTY_NOTIFY | BLECharacteristic::PROPERTY_READ);
+  pProvStatusChar->setValue("{\"status\":\"waiting\"}");
+
+  pService->start();
+
+  BLEAdvertising* pAdvertising = BLEDevice::getAdvertising();
+  pAdvertising->addServiceUUID(SERVICE_UUID);
+  pAdvertising->setScanResponse(true);
+  pAdvertising->setMinPreferred(0x06);
+  pAdvertising->setMinPreferred(0x12);
+  BLEDevice::startAdvertising();
+
+  Serial.printf("Advertising as: %s\n", getShortName().c_str());
+  Serial.printf("Service UUID: %s\n", SERVICE_UUID);
+  Serial.println("Waiting for WiFi credentials via BLE...");
+}
+
 // ─── Setup ───────────────────────────────────────────────────────────────────
 void setup() {
   Serial.begin(115200);
@@ -115,21 +278,42 @@ void setup() {
     Serial.println("MPU6050 connected.");
   }
 
-  connectWiFi();
-  connectFirebase();
+  // Load stored config (WiFi creds, device ID) from NVS
+  bool hasStoredConfig = loadStoredConfig();
 
-  // Mark device as online
-  Firebase.RTDB.setBool(&fbdo, String("/devices/") + DEVICE_ID + "/sensors/online", true);
-  Serial.println("\n=== ESP32 Guardian Firmware Started ===");
-  Serial.printf("SOS Button Pin: GPIO %d (active LOW)\n", SOS_BUTTON_PIN);
-  Serial.println("Ready for operation.");
+  if (hasStoredConfig) {
+    if (connectWiFi()) {
+      // WiFi success — normal operation
+      connectFirebase();
+      Firebase.RTDB.setBool(&fbdo, String("/devices/") + deviceId + "/sensors/online", true);
+      Serial.println("\n=== ESP32 Guardian Firmware Started ===");
+      Serial.printf("Device ID: %s\n", deviceId.c_str());
+      Serial.printf("SOS Button Pin: GPIO %d (active LOW)\n", SOS_BUTTON_PIN);
+      Serial.println("Ready for operation.");
+      delay(2000);
+      fetchGeofences();
+      return;
+    }
+    Serial.println("Stored WiFi failed, entering provisioning mode...");
+  } else {
+    Serial.println("No stored WiFi credentials, entering provisioning mode...");
+  }
 
-  delay(2000);
-  fetchGeofences();
+  // Start BLE provisioning if WiFi failed or no creds stored
+  provisioningMode = true;
+  startBLEProvisioning();
 }
 
 // ─── Loop ────────────────────────────────────────────────────────────────────
 void loop() {
+  // In provisioning mode, only blink LED and wait for BLE connection
+  if (provisioningMode) {
+    bool ledState = (millis() % 2000 < 100);
+    digitalWrite(LED_PIN, ledState ? HIGH : LOW);
+    delay(10);
+    return;
+  }
+
   // Feed GPS
   while (gpsSerial.available()) {
     gps.encode(gpsSerial.read());
@@ -214,7 +398,7 @@ void loop() {
 
   // Check if emergency was cleared from app
   if (emergencyActive) {
-    if (Firebase.RTDB.getBool(&fbdo, String("/devices/") + DEVICE_ID + "/emergency/active")) {
+    if (Firebase.RTDB.getBool(&fbdo, String("/devices/") + deviceId + "/emergency/active")) {
       bool isActive = fbdo.to<bool>();
       if (!isActive) {
         resetEmergency();
@@ -241,7 +425,7 @@ void loop() {
 
 // ─── Push Sensor Data ─────────────────────────────────────────────────────────
 void pushSensorData(float ax, float ay, float az, bool fall) {
-  String basePath = String("/devices/") + DEVICE_ID + "/sensors/";
+  String basePath = String("/devices/") + deviceId + "/sensors/";
 
   if (gps.location.isUpdated()) {
     Firebase.RTDB.setFloat(&fbdo, basePath + "gps/lat", gps.location.lat());
@@ -269,7 +453,7 @@ void triggerEmergency(String reason) {
     return;
   }
 
-  String path = String("/devices/") + DEVICE_ID + "/emergency/";
+  String path = String("/devices/") + deviceId + "/emergency/";
 
   bool success = true;
   success = Firebase.RTDB.setBool(&fbdo, path + "active", true) && success;
@@ -306,14 +490,27 @@ void resetEmergency() {
 }
 
 // ─── WiFi Connection ──────────────────────────────────────────────────────────
-void connectWiFi() {
-  Serial.print("Connecting to WiFi");
-  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+bool connectWiFi() {
+  if (wifiSSID.length() == 0) {
+    Serial.println("WiFi: No stored credentials.");
+    return false;
+  }
+
+  Serial.printf("Connecting to WiFi: %s\n", wifiSSID.c_str());
+  WiFi.begin(wifiSSID.c_str(), wifiPassword.c_str());
+
+  unsigned long start = millis();
   while (WiFi.status() != WL_CONNECTED) {
+    if (millis() - start > WIFI_CONNECT_TIMEOUT_MS) {
+      Serial.println("\nWiFi: Connection timeout.");
+      return false;
+    }
     delay(500);
     Serial.print(".");
   }
+
   Serial.println("\nWiFi connected: " + WiFi.localIP().toString());
+  return true;
 }
 
 // ─── Firebase Connection ──────────────────────────────────────────────────────
@@ -333,7 +530,7 @@ void fetchGeofences() {
     return;
   }
 
-  String geofencePath = String("/devices/") + DEVICE_ID + "/geofences";
+  String geofencePath = String("/devices/") + deviceId + "/geofences";
 
   if (Firebase.RTDB.getJSON(&fbdo, geofencePath)) {
     DynamicJsonDocument doc(4096);
@@ -424,7 +621,7 @@ void logGeofenceViolation(
     double lng,
     float distance) {
 
-  String path = String("/devices/") + DEVICE_ID + "/geofence_violations/";
+  String path = String("/devices/") + deviceId + "/geofence_violations/";
   String tsKey = String(millis()); // unique key only, not stored as a time value
   path += tsKey;
 

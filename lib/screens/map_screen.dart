@@ -69,6 +69,8 @@ class _MapScreenState extends State<MapScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (widget.deviceId.isEmpty) return _buildNoDevice();
+
     final center = _deviceLocation ?? _defaultCenter;
     final hasLocation = _deviceLocation != null;
 
@@ -361,6 +363,44 @@ class _MapScreenState extends State<MapScreen> {
               child: const Icon(Icons.my_location, color: Colors.white),
             )
           : null,
+    );
+  }
+
+  Widget _buildNoDevice() {
+    return Scaffold(
+      backgroundColor: const Color(0xFFF0F4FF),
+      appBar: AppBar(
+        backgroundColor: const Color(0xFF1565C0),
+        elevation: 0,
+        title: const Row(
+          children: [
+            Icon(Icons.map, color: Colors.white, size: 20),
+            SizedBox(width: 8),
+            Text('Live Location',
+                style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 18)),
+          ],
+        ),
+      ),
+      body: const Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.bluetooth_disabled, size: 48, color: Color(0xFF9EA8C2)),
+            SizedBox(height: 16),
+            Text('No device configured',
+                style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF6B7A99))),
+            SizedBox(height: 8),
+            Text('Set up your device from the Home tab',
+                style: TextStyle(fontSize: 13, color: Color(0xFF9EA8C2))),
+          ],
+        ),
+      ),
     );
   }
 }

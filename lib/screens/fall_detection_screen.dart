@@ -10,6 +10,7 @@ class FallDetectionScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (deviceId.isEmpty) return _buildNoDevice(context);
     final firebase = FirebaseService();
 
     return Scaffold(
@@ -306,6 +307,44 @@ class FallDetectionScreen extends StatelessWidget {
       ),
     );
   }
+
+  Widget _buildNoDevice(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFF0F4FF),
+      appBar: AppBar(
+        backgroundColor: const Color(0xFF1565C0),
+        elevation: 0,
+        title: const Row(
+          children: [
+            Icon(Icons.sensors, color: Colors.white, size: 20),
+            SizedBox(width: 8),
+            Text('Fall Detection',
+                style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 18)),
+          ],
+        ),
+      ),
+      body: const Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.bluetooth_disabled, size: 48, color: Color(0xFF9EA8C2)),
+            SizedBox(height: 16),
+            Text('No device configured',
+                style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF6B7A99))),
+            SizedBox(height: 8),
+            Text('Set up your device from the Home tab',
+                style: TextStyle(fontSize: 13, color: Color(0xFF9EA8C2))),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 class _AccelBar extends StatelessWidget {
@@ -433,4 +472,5 @@ class _InfoRow extends StatelessWidget {
       ],
     );
   }
+
 }

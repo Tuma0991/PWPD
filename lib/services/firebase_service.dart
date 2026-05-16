@@ -42,10 +42,8 @@ class FirebaseService {
         'name': name,
         'email': email,
         'createdAt': FieldValue.serverTimestamp(),
-        'deviceId': 'esp32_device_1',
       });
     } catch (e) {
-      // Log error but don't crash - user is already created in Auth
       print('Warning: Failed to create user document: $e');
     }
     return cred;
@@ -55,6 +53,21 @@ class FirebaseService {
 
   Future<void> resetPassword(String email) async {
     await _auth.sendPasswordResetEmail(email: email);
+  }
+
+  Future<void> updateUserDeviceId(String deviceId) async {
+    final user = currentUser;
+    if (user == null) return;
+    await _firestore.collection('users').doc(user.uid).update({
+      'deviceId': deviceId,
+    });
+  }
+
+  Future<String?> getUserDeviceId() async {
+    final user = currentUser;
+    if (user == null) return null;
+    final doc = await _firestore.collection('users').doc(user.uid).get();
+    return doc.data()?['deviceId'] as String?;
   }
 
   // ─── REAL-TIME DEVICE DATA (ESP32 → Firebase RTDB) ───────────────────────

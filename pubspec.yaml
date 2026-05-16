@@ -29,6 +29,9 @@ dependencies:
   lottie: ^3.1.0
   shimmer: ^3.0.0
 
+  # BLE
+  flutter_blue_plus: ^1.32.0
+
   # Utilities
   url_launcher: ^6.2.6
   shared_preferences: ^2.2.3

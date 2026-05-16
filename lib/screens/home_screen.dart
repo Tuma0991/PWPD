@@ -3,12 +3,14 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import '../services/firebase_service.dart';
+import '../services/device_config_service.dart';
 import '../models/device_data.dart';
 import 'map_screen.dart';
 import 'fall_detection_screen.dart';
 import 'alerts_screen.dart';
 import 'contacts_screen.dart';
 import 'geofence_screen.dart';
+import 'device_setup_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -20,24 +22,54 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   int _currentIndex = 0;
 
-  final String _deviceId = 'esp32_device_1';
+  String? _deviceId;
+  bool _isConfigured = false;
+  bool _isLoading = true;
+  final _deviceConfig = DeviceConfigService();
 
   @override
   void initState() {
     super.initState();
+    _loadDeviceConfig();
+  }
+
+  Future<void> _loadDeviceConfig() async {
+    final deviceId = await _deviceConfig.getDeviceId();
+    if (mounted) {
+      setState(() {
+        _deviceId = deviceId;
+        _isConfigured = deviceId != null && deviceId.isNotEmpty;
+        _isLoading = false;
+      });
+    }
+  }
+
+  Future<void> _openSetup() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const DeviceSetupScreen()),
+    );
+    _loadDeviceConfig();
   }
 
   @override
   Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator(color: Color(0xFF1565C0))),
+      );
+    }
+
     final firebase = FirebaseService();
     final userId = firebase.currentUser?.uid ?? '';
+    final deviceId = _deviceId ?? '';
 
     final screens = [
-      _DashboardTab(deviceId: _deviceId),
-      MapScreen(deviceId: _deviceId),
-      FallDetectionScreen(deviceId: _deviceId),
-      AlertsScreen(deviceId: _deviceId),
-      GeofenceScreen(userId: userId, deviceId: _deviceId),
+      _DashboardTab(deviceId: deviceId, isConfigured: _isConfigured, onSetup: _openSetup),
+      MapScreen(deviceId: deviceId),
+      FallDetectionScreen(deviceId: deviceId),
+      AlertsScreen(deviceId: deviceId),
+      GeofenceScreen(userId: userId, deviceId: deviceId),
       const ContactsScreen(),
     ];
 
@@ -187,7 +219,13 @@ class _NavItem extends StatelessWidget {
 
 class _DashboardTab extends StatefulWidget {
   final String deviceId;
-  const _DashboardTab({required this.deviceId});
+  final bool isConfigured;
+  final VoidCallback onSetup;
+  const _DashboardTab({
+    required this.deviceId,
+    required this.isConfigured,
+    required this.onSetup,
+  });
 
   @override
   State<_DashboardTab> createState() => _DashboardTabState();
@@ -237,6 +275,14 @@ class _DashboardTabState extends State<_DashboardTab> {
           ],
         ),
         actions: [
+          IconButton(
+            icon: Icon(
+              widget.isConfigured ? Icons.bluetooth_connected : Icons.bluetooth,
+              color: Colors.white,
+            ),
+            tooltip: widget.isConfigured ? 'Device configured' : 'Set up device',
+            onPressed: widget.onSetup,
+          ),
           IconButton(
             icon: const Icon(Icons.logout_outlined, color: Colors.white),
             onPressed: () async {
@@ -334,6 +380,56 @@ class _DashboardTabState extends State<_DashboardTab> {
               physics: const ClampingScrollPhysics(),
               padding: const EdgeInsets.all(0),
               children: [
+                // ─── No Device Banner ───────────────────────────────────
+                if (!widget.isConfigured)
+                  Container(
+                    margin: const EdgeInsets.all(16),
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFFF3E0),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: Colors.orange.withOpacity(0.3)),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.bluetooth_searching,
+                            color: Colors.orange, size: 26),
+                        const SizedBox(width: 12),
+                        const Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('No device connected',
+                                  style: TextStyle(
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 13,
+                                      color: Color(0xFFE65100))),
+                              SizedBox(height: 2),
+                              Text('Tap to set up your Guardian wearable via Bluetooth',
+                                  style: TextStyle(
+                                      fontSize: 12,
+                                      color: Color(0xFF6B7A99))),
+                            ],
+                          ),
+                        ),
+                        ElevatedButton(
+                          onPressed: widget.onSetup,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF1565C0),
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 14, vertical: 8),
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10)),
+                          ),
+                          child: const Text('Set Up',
+                              style: TextStyle(
+                                  fontWeight: FontWeight.w700, fontSize: 12)),
+                        ),
+                      ],
+                    ),
+                  ),
+
                 // ─── Top Welcome Banner ─────────────────────────────────
                 Container(
                   padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),

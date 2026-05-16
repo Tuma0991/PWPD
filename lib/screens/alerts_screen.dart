@@ -120,6 +120,8 @@ class _AlertsScreenState extends State<AlertsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (widget.deviceId.isEmpty) return _buildNoDevice();
+
     final userId = _firebase.currentUser?.uid ?? '';
 
     return Scaffold(
@@ -357,6 +359,44 @@ class _AlertsScreenState extends State<AlertsScreen> {
                 );
               },
             ),
+    );
+  }
+
+  Widget _buildNoDevice() {
+    return Scaffold(
+      backgroundColor: const Color(0xFFF0F4FF),
+      appBar: AppBar(
+        backgroundColor: const Color(0xFF1565C0),
+        elevation: 0,
+        title: const Row(
+          children: [
+            Icon(Icons.notifications_active, color: Colors.white, size: 20),
+            SizedBox(width: 8),
+            Text('Alert History',
+                style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 18)),
+          ],
+        ),
+      ),
+      body: const Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.bluetooth_disabled, size: 48, color: Color(0xFF9EA8C2)),
+            SizedBox(height: 16),
+            Text('No device configured',
+                style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF6B7A99))),
+            SizedBox(height: 8),
+            Text('Set up your device from the Home tab',
+                style: TextStyle(fontSize: 13, color: Color(0xFF9EA8C2))),
+          ],
+        ),
+      ),
     );
   }
 }
