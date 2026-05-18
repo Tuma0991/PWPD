@@ -42,19 +42,23 @@ class _MapScreenState extends State<MapScreen> {
       if (!mounted) return;
       setState(() {
         _latestData = data;
+        _lastSeenLabel = data.lastSeenLabel;
         if (_isValidGps(data.latitude, data.longitude)) {
-          _deviceLocation = LatLng(data.latitude, data.longitude);
-          _lastSeenLabel = data.lastSeenLabel;
-          if (_isFollowing) {
-            // Move camera to follow device
-            try {
-              if (_hasMovedOnce) {
-                _mapController.move(_deviceLocation!, _mapController.camera.zoom);
-              } else {
-                _mapController.move(_deviceLocation!, 15.0);
-                _hasMovedOnce = true;
-              }
-            } catch (_) {}
+          final newLoc = LatLng(data.latitude, data.longitude);
+          // Only update if location actually changed — avoids unnecessary
+          // rebuilds that cause the map to reset the view.
+          if (_deviceLocation != newLoc) {
+            _deviceLocation = newLoc;
+            if (_isFollowing) {
+              try {
+                if (_hasMovedOnce) {
+                  _mapController.move(newLoc, _mapController.camera.zoom);
+                } else {
+                  _mapController.move(newLoc, 15.0);
+                  _hasMovedOnce = true;
+                }
+              } catch (_) {}
+            }
           }
         }
       });

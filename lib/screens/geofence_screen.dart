@@ -1,8 +1,11 @@
 // lib/screens/geofence_screen.dart
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
+import '../models/device_data.dart';
 import '../models/geofence_model.dart';
 import '../services/firebase_service.dart';
 
@@ -30,7 +33,38 @@ class _GeofenceScreenState extends State<GeofenceScreen> {
   String _fenceName = '';
   GeofenceModel? _editingGeofence;
 
+  // ─── Device GPS tracking ────────────────────────────────────────────────────
+  StreamSubscription<DeviceData>? _dataSub;
+  LatLng? _deviceLocation;
+
+  static bool _isValidGps(double lat, double lng) =>
+      lat.abs() > 0.5 || lng.abs() > 0.5;
+
   static const LatLng _defaultCenter = LatLng(10.0989, 122.8708);
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.deviceId.isNotEmpty) {
+      _dataSub = _firebase.listenToDeviceData(widget.deviceId).listen((data) {
+        if (!mounted) return;
+        if (_isValidGps(data.latitude, data.longitude)) {
+          final newLoc = LatLng(data.latitude, data.longitude);
+          // Don't rebuild if location hasn't changed — the ESP32 pushes
+          // every 2s, which would otherwise flicker the entire map.
+          if (_deviceLocation != newLoc) {
+            setState(() => _deviceLocation = newLoc);
+          }
+        }
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _dataSub?.cancel();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -158,6 +192,19 @@ class _GeofenceScreenState extends State<GeofenceScreen> {
                         'User-Agent': 'pwpd/1.0 (Flutter; Android)',
                       },
                     ),
+
+                    // ── Device position marker (view mode) ──────────
+                    if (!_isDrawing && _deviceLocation != null)
+                      MarkerLayer(
+                        markers: [
+                          Marker(
+                            point: _deviceLocation!,
+                            width: 48,
+                            height: 48,
+                            child: const _DeviceLocationMarker(),
+                          ),
+                        ],
+                      ),
 
                     // ── Saved geofence polygons (view mode) ─────────
                     if (!_isDrawing)
@@ -1062,5 +1109,46 @@ class _GeofenceCard extends StatelessWidget {
     }
     final first = vertices.first;
     return '${first.latitude.toStringAsFixed(4)}, ${first.longitude.toStringAsFixed(4)} ... +${vertices.length - 1} more';
+  }
+}
+
+// ─── Device Location Marker ────────────────────────────────────────────────────
+
+class _DeviceLocationMarker extends StatelessWidget {
+  const _DeviceLocationMarker();
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      alignment: Alignment.center,
+      children: [
+        // Pulse ring
+        Container(
+          width: 48,
+          height: 48,
+          decoration: BoxDecoration(
+            color: const Color(0xFF1565C0).withOpacity(0.12),
+            shape: BoxShape.circle,
+          ),
+        ),
+        // Inner dot
+        Container(
+          width: 24,
+          height: 24,
+          decoration: BoxDecoration(
+            color: const Color(0xFF1565C0),
+            shape: BoxShape.circle,
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFF1565C0).withOpacity(0.4),
+                blurRadius: 6,
+                spreadRadius: 1,
+              ),
+            ],
+          ),
+          child: const Icon(Icons.person, color: Colors.white, size: 14),
+        ),
+      ],
+    );
   }
 }

@@ -28,6 +28,7 @@ class _DeviceSetupScreenState extends State<DeviceSetupScreen> {
   StreamSubscription<ScanResult>? _scanSub;
   final List<ScanResult> _scanResults = [];
   bool _isScanning = false;
+  ScanResult? _selectedDevice;
 
   // WiFi entry
   final _ssidCtrl = TextEditingController();
@@ -147,6 +148,7 @@ class _DeviceSetupScreenState extends State<DeviceSetupScreen> {
   Future<void> _selectDevice(ScanResult result) async {
     _scanSub?.cancel();
     setState(() {
+      _selectedDevice = result;
       _isScanning = false;
       _step = SetupStep.enterWifi;
     });
@@ -164,9 +166,17 @@ class _DeviceSetupScreenState extends State<DeviceSetupScreen> {
       _errorMessage = null;
     });
 
+    if (_selectedDevice == null) {
+      setState(() {
+        _step = SetupStep.error;
+        _errorMessage = 'No device selected. Please scan again.';
+      });
+      return;
+    }
+
     try {
       final result = await _ble.provisionDevice(
-        _scanResults.first,
+        _selectedDevice!,
         ssid: _ssidCtrl.text.trim(),
         password: _passCtrl.text,
       );

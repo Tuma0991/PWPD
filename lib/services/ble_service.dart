@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 
 class BleProvisioningService {
@@ -26,13 +27,31 @@ class BleProvisioningService {
     ScanResult scanResult, {
     required String ssid,
     required String password,
-    Duration connectionTimeout = const Duration(seconds: 30),
+    Duration connectionTimeout = const Duration(seconds: 10),
   }) async {
     final device = scanResult.device;
     final deviceName = scanResult.advertisementData.advName;
 
     try {
-      await device.connect(timeout: connectionTimeout);
+      // Retry connection up to 3 times. Android BLE stacks sometimes fail
+      // the first connection attempt with freshly discovered devices.
+      Exception? lastError;
+      for (int attempt = 1; attempt <= 3; attempt++) {
+        try {
+          await device.connect(timeout: connectionTimeout);
+          lastError = null;
+          break;
+        } on Exception catch (e) {
+          lastError = e;
+          debugPrint('[BLE] connect attempt $attempt/3 failed: $e');
+          if (attempt < 3) {
+            // Give the peripheral and Android BLE stack time to recover
+            await Future.delayed(const Duration(seconds: 2));
+          }
+        }
+      }
+      if (lastError != null) throw lastError;
+
       await device.discoverServices();
 
       BluetoothService? service;
@@ -70,30 +89,41 @@ class BleProvisioningService {
       final deviceInfo = jsonDecode(utf8.decode(deviceInfoRaw)) as Map<String, dynamic>;
       final deviceId = deviceInfo['deviceId'] as String? ?? '';
 
+      // Set up notification listener BEFORE writing credentials.
+      // The ESP32 reboots ~1.5s after receiving the write, so we need to
+      // be listening before the write, not after.
+      StreamSubscription? statusSub;
+      final completer = Completer<String>();
+
+      if (provStatusChar != null) {
+        await provStatusChar.setNotifyValue(true);
+        statusSub = provStatusChar.onValueReceived.listen((value) {
+          try {
+            final status = jsonDecode(utf8.decode(value)) as Map<String, dynamic>;
+            if (status['status'] == 'connected') {
+              if (!completer.isCompleted) {
+                completer.complete(status['message'] as String? ?? 'Device configured');
+              }
+            } else if (status['status'] == 'failed') {
+              if (!completer.isCompleted) {
+                completer.completeError(
+                  Exception(status['message'] ?? 'Provisioning failed'));
+              }
+            }
+          } catch (_) {}
+        });
+      }
+
       final credsJson = jsonEncode({'ssid': ssid, 'password': password});
       await wifiCredsChar.write(utf8.encode(credsJson), withoutResponse: false);
 
       if (provStatusChar != null) {
-        await provStatusChar.setNotifyValue(true);
-        final completer = Completer<String>();
-
-        final subscription = provStatusChar.onValueReceived.listen((value) {
-          try {
-            final status = jsonDecode(utf8.decode(value)) as Map<String, dynamic>;
-            if (status['status'] == 'connected') {
-              completer.complete(status['message'] as String? ?? 'Device connected');
-            } else if (status['status'] == 'failed') {
-              completer.completeError(Exception(status['message'] ?? 'Provisioning failed'));
-            }
-          } catch (_) {}
-        });
-
         try {
-          await completer.future.timeout(const Duration(seconds: 20));
+          await completer.future.timeout(const Duration(seconds: 10));
         } on TimeoutException {
-          // ESP32 likely already rebooted, which is expected
+          // ESP32 reboots after saving creds — timeout is normal.
         } finally {
-          await subscription.cancel();
+          await statusSub?.cancel();
         }
       }
 

@@ -119,6 +119,7 @@ bool lastGeofenceStatus[MAX_GEOFENCES] = {false};
 // BLE & NVS state
 Preferences preferences;
 bool provisioningMode = false;
+volatile bool pendingRestart = false;
 String deviceId = "";
 String wifiSSID = "";
 String wifiPassword = "";
@@ -222,11 +223,13 @@ public:
       serializeJson(statusDoc, statusJson);
       pStatusChar->setValue(statusJson.c_str());
       pStatusChar->notify();
-      delay(500);
     }
 
-    Serial.println("[BLE] Rebooting to apply WiFi credentials...");
-    ESP.restart();
+    // Don't call ESP.restart() inside the BLE callback — it kills the
+    // connection before the GATT write acknowledgement is sent, causing
+    // GATT error 133 on the phone. Set a flag and restart from loop().
+    Serial.println("[BLE] WiFi credentials saved. Will reboot shortly...");
+    pendingRestart = true;
   }
 };
 
@@ -313,6 +316,13 @@ void setup() {
     Serial.println("No stored WiFi credentials, entering provisioning mode...");
   }
 
+  // Shut down the WiFi radio before starting BLE. The ESP32 shares a single
+  // radio between WiFi and BLE — after a failed WiFi.begin(), the radio is
+  // still in WiFi mode and BLE advertising will silently fail.
+  WiFi.disconnect(true);
+  WiFi.mode(WIFI_OFF);
+  delay(100);
+
   // Start BLE provisioning if WiFi failed or no creds stored
   provisioningMode = true;
   startBLEProvisioning();
@@ -322,6 +332,14 @@ void setup() {
 void loop() {
   // In provisioning mode, only blink LED and wait for BLE connection
   if (provisioningMode) {
+    // Restart from loop() — NOT inside the BLE callback — so the GATT
+    // write acknowledgement can be sent to the phone before rebooting.
+    if (pendingRestart) {
+      Serial.println("[BLE] Restarting now...");
+      delay(500);
+      ESP.restart();
+    }
+
     bool ledState = (millis() % 2000 < 100);
     digitalWrite(LED_PIN, ledState ? HIGH : LOW);
     delay(10);
