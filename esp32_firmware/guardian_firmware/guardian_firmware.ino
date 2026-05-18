@@ -29,6 +29,7 @@
 #include <BLEDevice.h>
 #include <BLEUtils.h>
 #include <BLEServer.h>
+#include <BLEAdvertising.h>
 
 // ─── Firebase Config ──────────────────────────────────────────────────────────
 #define FIREBASE_HOST   "https://pwpd-5e580-default-rtdb.firebaseio.com"
@@ -187,6 +188,9 @@ class DeviceInfoCallback : public BLECharacteristicCallbacks {
 };
 
 class WiFiCredsCallback : public BLECharacteristicCallbacks {
+public:
+  BLECharacteristic* pStatusChar = nullptr;
+
   void onWrite(BLECharacteristic* pCharacteristic) {
     String json = String(pCharacteristic->getValue().c_str());
     Serial.printf("[BLE] WiFi creds received: %s\n", json.c_str());
@@ -205,12 +209,11 @@ class WiFiCredsCallback : public BLECharacteristicCallbacks {
     if (strlen(ssid) == 0 || strlen(pass) == 0) {
       Serial.println("[BLE] Invalid credentials - ssid or password empty");
       return;
-    }
+    } 
+    
 
     saveWiFiCredentials(ssid, pass);
 
-    BLECharacteristic* pStatusChar =
-        pCharacteristic->getService()->getCharacteristic(CHAR_UUID_PROV_STATUS);
     if (pStatusChar) {
       StaticJsonDocument<256> statusDoc;
       statusDoc["status"] = "connected";
@@ -239,20 +242,31 @@ void startBLEProvisioning() {
   pDeviceInfoChar->setCallbacks(new DeviceInfoCallback());
   pDeviceInfoChar->setValue(buildDeviceInfoJSON().c_str());
 
-  BLECharacteristic* pWifiCredsChar =
-      pService->createCharacteristic(CHAR_UUID_WIFI_CREDS, BLECharacteristic::PROPERTY_WRITE);
-  pWifiCredsChar->setCallbacks(new WiFiCredsCallback());
-
   BLECharacteristic* pProvStatusChar =
       pService->createCharacteristic(CHAR_UUID_PROV_STATUS,
           BLECharacteristic::PROPERTY_NOTIFY | BLECharacteristic::PROPERTY_READ);
   pProvStatusChar->setValue("{\"status\":\"waiting\"}");
+
+  WiFiCredsCallback* pWifiCredsCb = new WiFiCredsCallback();
+  pWifiCredsCb->pStatusChar = pProvStatusChar;
+
+  BLECharacteristic* pWifiCredsChar =
+      pService->createCharacteristic(CHAR_UUID_WIFI_CREDS, BLECharacteristic::PROPERTY_WRITE);
+  pWifiCredsChar->setCallbacks(pWifiCredsCb);
 
   pService->start();
 
   BLEAdvertising* pAdvertising = BLEDevice::getAdvertising();
   pAdvertising->addServiceUUID(SERVICE_UUID);
   pAdvertising->setScanResponse(true);
+
+  // Put the device name in the scan response so Flutter's advName picks it up.
+  // Phone Bluetooth settings can read GAP name directly, but flutter_blue_plus
+  // only sees names in advertising / scan-response payloads.
+  BLEAdvertisementData scanRespData;
+  scanRespData.setName(getShortName().c_str());
+  pAdvertising->setScanResponseData(scanRespData);
+
   pAdvertising->setMinPreferred(0x06);
   pAdvertising->setMinPreferred(0x12);
   BLEDevice::startAdvertising();

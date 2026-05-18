@@ -11,14 +11,13 @@ class BleProvisioningService {
   final Guid _serviceGuid = Guid(serviceUuid);
 
   Stream<ScanResult> scanForGuardianDevices({Duration timeout = const Duration(seconds: 15)}) async* {
+    // Do an unfiltered scan. Android's withServices filter is unreliable with
+    // 128-bit UUIDs. We scan for everything and match in Dart.
     await FlutterBluePlus.startScan(timeout: timeout);
 
     await for (final results in FlutterBluePlus.scanResults) {
       for (final result in results) {
-        final name = result.advertisementData.advName;
-        if (name.contains('Guardian_')) {
-          yield result;
-        }
+        yield result;
       }
     }
   }

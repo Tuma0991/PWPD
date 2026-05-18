@@ -1,6 +1,8 @@
 import 'dart:async';
+import 'dart:io' show Platform;
 import 'package:flutter/material.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
+import 'package:permission_handler/permission_handler.dart';
 import '../services/ble_service.dart';
 import '../services/device_config_service.dart';
 import '../services/firebase_service.dart';
@@ -50,12 +52,73 @@ class _DeviceSetupScreenState extends State<DeviceSetupScreen> {
     _startScan();
   }
 
-  void _startScan() {
+  Future<bool> _checkPermissions() async {
+    // Android 12+ requires BLUETOOTH_SCAN at runtime.
+    // Older Android requires ACCESS_FINE_LOCATION for BLE.
+    if (Platform.isAndroid) {
+      final btScan = await Permission.bluetoothScan.status;
+      final btConnect = await Permission.bluetoothConnect.status;
+
+      if (btScan.isDenied || btConnect.isDenied) {
+        final results = await [
+          Permission.bluetoothScan,
+          Permission.bluetoothConnect,
+        ].request();
+        if (results.values.any((s) => s.isDenied || s.isPermanentlyDenied)) {
+          if (mounted) {
+            setState(() {
+              _errorMessage = 'BLE permissions denied. '
+                  'Please grant Nearby Devices permission in App Settings.';
+            });
+          }
+          return false;
+        }
+      }
+
+      // On Android < 13, location services must be ON for BLE scanning.
+      // On Android 13+, neverForLocation flag skips this — but our manifest
+      // doesn't set that flag, so we check anyway.
+      final location = await Permission.location.status;
+      if (location.isDenied) {
+        await Permission.location.request();
+        if (await Permission.location.status.isDenied) {
+          if (mounted) {
+            setState(() {
+              _errorMessage = 'Location permission is required for BLE scanning.';
+            });
+          }
+          return false;
+        }
+      }
+    }
+
+    // iOS requires Bluetooth permission (handled by flutter_blue_plus Info.plist).
+    return true;
+  }
+
+  Future<void> _startScan() async {
     setState(() {
       _step = SetupStep.scan;
       _scanResults.clear();
       _isScanning = true;
+      _errorMessage = null;
     });
+
+    // Check Bluetooth adapter state
+    final btState = await FlutterBluePlus.adapterState.first;
+    if (btState != BluetoothAdapterState.on) {
+      setState(() {
+        _isScanning = false;
+        _errorMessage = 'Bluetooth is not enabled. Please turn on Bluetooth.';
+      });
+      return;
+    }
+
+    // Request runtime permissions (critical on Android 12+)
+    if (!await _checkPermissions()) {
+      setState(() => _isScanning = false);
+      return;
+    }
 
     _scanSub = _ble.scanForGuardianDevices().listen(
       (result) {
@@ -178,9 +241,22 @@ class _DeviceSetupScreenState extends State<DeviceSetupScreen> {
     }
   }
 
+  static bool _isGuardianDevice(ScanResult r) {
+    final name = r.advertisementData.advName;
+    final services = r.advertisementData.serviceUuids;
+    final guardianUuid = Guid(BleProvisioningService.serviceUuid);
+    return (name.isNotEmpty && name.contains('Guardian_')) ||
+           services.any((u) => u == guardianUuid);
+  }
+
   // ─── Scan View ──────────────────────────────────────────────────────────
 
   Widget _buildScanView() {
+    // Split results: Guardian devices first, then everything else
+    final guardian = _scanResults.where(_isGuardianDevice).toList();
+    final others = _scanResults.where((r) => !_isGuardianDevice(r)).toList();
+    final allSorted = [...guardian, ...others];
+
     return Column(
       children: [
         Container(
@@ -224,7 +300,9 @@ class _DeviceSetupScreenState extends State<DeviceSetupScreen> {
               ),
               const SizedBox(height: 6),
               Text(
-                'Make sure your Guardian device is powered on\nand nearby. The LED should be blinking rapidly.',
+                _isScanning
+                    ? 'Make sure your Guardian device is powered on\nand nearby. The LED should be blinking.'
+                    : 'Scan complete. ${guardian.length} Guardian device(s),\n${others.length} other device(s) found.',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   color: Colors.white.withOpacity(0.8),
@@ -235,8 +313,13 @@ class _DeviceSetupScreenState extends State<DeviceSetupScreen> {
             ],
           ),
         ),
+        if (_errorMessage != null)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+            child: _ErrorBanner(message: _errorMessage!),
+          ),
         Expanded(
-          child: _scanResults.isEmpty
+          child: allSorted.isEmpty
               ? Center(
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -247,30 +330,40 @@ class _DeviceSetupScreenState extends State<DeviceSetupScreen> {
                         color: const Color(0xFF9EA8C2).withOpacity(0.5),
                       ),
                       const SizedBox(height: 12),
-                      const Text(
-                        'No Guardian devices found',
-                        style: TextStyle(
+                      Text(
+                        _isScanning ? 'Searching...' : 'No devices found',
+                        style: const TextStyle(
                           fontSize: 15,
                           fontWeight: FontWeight.w600,
                           color: Color(0xFF6B7A99),
                         ),
                       ),
                       const SizedBox(height: 4),
-                      const Text(
-                        'Press the reset button on your device',
-                        style: TextStyle(fontSize: 13, color: Color(0xFF9EA8C2)),
+                      Text(
+                        _isScanning
+                            ? 'Listening for BLE advertisements'
+                            : 'Ensure Bluetooth and Location are enabled,\nthen press Scan Again',
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          fontSize: 13,
+                          color: Color(0xFF9EA8C2),
+                        ),
                       ),
                     ],
                   ),
                 )
               : ListView.builder(
                   padding: const EdgeInsets.all(20),
-                  itemCount: _scanResults.length,
+                  itemCount: allSorted.length,
                   itemBuilder: (context, index) {
-                    final result = _scanResults[index];
+                    final result = allSorted[index];
+                    final isGuardian = _isGuardianDevice(result);
                     return _DeviceCard(
-                      name: result.advertisementData.advName,
+                      name: result.advertisementData.advName.isNotEmpty
+                          ? result.advertisementData.advName
+                          : result.device.remoteId.toString(),
                       rssi: result.rssi,
+                      isGuardian: isGuardian,
                       onTap: () => _selectDevice(result),
                     );
                   },
@@ -554,11 +647,13 @@ class _DeviceSetupScreenState extends State<DeviceSetupScreen> {
 class _DeviceCard extends StatelessWidget {
   final String name;
   final int rssi;
+  final bool isGuardian;
   final VoidCallback onTap;
 
   const _DeviceCard({
     required this.name,
     required this.rssi,
+    required this.isGuardian,
     required this.onTap,
   });
 
@@ -588,27 +683,63 @@ class _DeviceCard extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF1565C0).withOpacity(0.1),
+                    color: isGuardian
+                        ? const Color(0xFF1565C0).withOpacity(0.1)
+                        : const Color(0xFF6B7A99).withOpacity(0.08),
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child: const Icon(Icons.bluetooth, color: Color(0xFF1565C0), size: 22),
+                  child: Icon(
+                    isGuardian ? Icons.shield : Icons.bluetooth,
+                    color: isGuardian ? const Color(0xFF1565C0) : const Color(0xFF6B7A99),
+                    size: 22,
+                  ),
                 ),
                 const SizedBox(width: 14),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        name,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.w700,
-                          fontSize: 15,
-                          color: Color(0xFF1A2340),
-                        ),
+                      Row(
+                        children: [
+                          Flexible(
+                            child: Text(
+                              name,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontWeight: FontWeight.w700,
+                                fontSize: 15,
+                                color: isGuardian
+                                    ? const Color(0xFF1A2340)
+                                    : const Color(0xFF6B7A99),
+                              ),
+                            ),
+                          ),
+                          if (isGuardian) ...[
+                            const SizedBox(width: 6),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 6,
+                                vertical: 2,
+                              ),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFE8F5E9),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: const Text(
+                                'GUARDIAN',
+                                style: TextStyle(
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.w800,
+                                  color: Color(0xFF43A047),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        'Tap to configure',
+                        isGuardian ? 'Tap to configure' : 'Other device',
                         style: TextStyle(
                           fontSize: 12,
                           color: const Color(0xFF6B7A99).withOpacity(0.8),
