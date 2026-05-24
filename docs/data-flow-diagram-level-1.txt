@@ -1,0 +1,75 @@
+# Data Flow Diagram Level 1 — GuardianNako IoT Wearable Protection System
+
+**Figure 3**
+
+*Level 1 Data Flow Diagram of the GuardianNako System*
+
+```mermaid
+graph TB
+    %% ─── External Entities ───────────────────────────────────────────
+    PP["Protected Person<br/>(Wearer)"]
+    GC["Guardian / Parent<br/>(App User)"]
+    EC["Emergency Contacts"]
+    GPS["GPS Satellites"]
+
+    %% ─── Data Stores ─────────────────────────────────────────────────
+    D1[("D1: Sensor Readings<br/>(Firebase RTDB)")]
+    D2[("D2: Emergency State<br/>(Firebase RTDB)")]
+    D3[("D3: Device Geofences<br/>(Firebase RTDB)")]
+    D4[("D4: Geofence Violations<br/>(Firebase RTDB)")]
+    D5[("D5: Users<br/>(Cloud Firestore)")]
+    D6[("D6: Contacts<br/>(Cloud Firestore)")]
+    D7[("D7: Geofence Definitions<br/>(Cloud Firestore)")]
+    D8[("D8: Alert History<br/>(Cloud Firestore)")]
+    D9[("D9: Device Config<br/>(ESP32 NVS)")]
+
+    %% ─── Processes ───────────────────────────────────────────────────
+    P1("1.0<br/>Collect & Transmit<br/>Sensor Data<br/><i>ESP32</i>")
+    P2("2.0<br/>Handle Emergency<br/>Alerts<br/><i>ESP32 + Mobile App</i>")
+    P3("3.0<br/>Stream Live<br/>Monitoring<br/><i>Mobile App</i>")
+    P4("4.0<br/>Manage<br/>Geofences<br/><i>Mobile App + ESP32</i>")
+    P5("5.0<br/>Manage Emergency<br/>Contacts<br/><i>Mobile App</i>")
+    P6("6.0<br/>Provision Device<br/>via BLE<br/><i>Mobile App + ESP32</i>")
+
+    %% ─── Flows: External Entities → Processes ────────────────────────
+    PP -->|"Movement / Acceleration"| P1
+    PP -->|"SOS Button Press"| P2
+    GPS -->|"GPS Coordinates<br/>(NMEA sentences)"| P1
+    GC -->|"WiFi Credentials"| P6
+    GC -->|"Geofence CRUD<br/>(create, edit, delete, toggle)"| P4
+    GC -->|"Contact CRUD<br/>(add, edit, delete)"| P5
+    GC -->|"Dismiss Emergency"| P2
+
+    %% ─── Flows: Processes → External Entities ────────────────────────
+    P3 -->|"Dashboard: sensor data,<br/>GPS coords, device status"| GC
+    P3 -->|"Map: live location marker"| GC
+    P3 -->|"Fall Detection: accel bars,<br/>fall status circle"| GC
+    P2 -->|"Emergency Alert Banner"| GC
+    P4 -->|"Geofence List,<br/>Violation History"| GC
+    P5 -->|"Contact List,<br/>Tap-to-Dial"| GC
+    P5 -->|"Phone Call (tel: URI)"| EC
+    P1 -->|"Status LED<br/>(online/alert)"| PP
+
+    %% ─── Flows: Processes → Data Stores ──────────────────────────────
+    P1 -->|"Write sensor data<br/>every 2s"| D1
+    P1 -->|"Read device ID"| D9
+    P2 -->|"Write emergency state"| D2
+    P2 -->|"Log alert"| D8
+    P4 -->|"Write synced geofences"| D3
+    P4 -->|"CRUD geofence definitions"| D7
+    P4 -->|"Log violations"| D4
+    P5 -->|"CRUD contacts"| D6
+    P6 -->|"Write WiFi creds,<br/>device ID"| D9
+    P6 -->|"Register device ID"| D5
+
+    %% ─── Flows: Data Stores → Processes ──────────────────────────────
+    D1 -->|"Stream sensor data"| P3
+    D2 -->|"Stream emergency state"| P2
+    D3 -->|"Read synced geofences"| P4
+    D4 -->|"Stream violations"| P4
+    D5 -->|"Read user profile"| P3
+    D6 -->|"Read contact list"| P5
+    D7 -->|"Read geofence definitions"| P4
+    D8 -->|"Read alert history"| P3
+    D9 -->|"Read WiFi creds,<br/>device ID"| P1
+```
