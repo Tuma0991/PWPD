@@ -1,0 +1,92 @@
+# System Architecture — GuardianNako IoT Wearable Protection System
+
+**Figure 10**
+
+*Logical System Architecture of the GuardianNako System*
+
+```mermaid
+graph TB
+    %% ─── Actors / Entities ───────────────────────────────────────────
+    Wearer["👤 Protected Person<br/><i>(Wearer)</i>"]
+    Guardian["👤 Guardian / Parent<br/><i>(App User)</i>"]
+    Contacts["📞 Emergency Contacts"]
+
+    %% ─── Core System ─────────────────────────────────────────────────
+    Device["📡 ESP32 Wearable Device<br/><i>Accelerometer + GPS + SOS Button</i>"]
+    App["📱 Flutter Mobile App<br/><i>Dashboard, Map, Alerts,<br/>Geofences, Contacts</i>"]
+    Cloud["☁️ Firebase Cloud<br/><i>Real-time Database + Firestore</i>"]
+
+    %% ─── Relationships ───────────────────────────────────────────────
+    Wearer -->|"Wears device<br/>Movement + SOS button"| Device
+    Device -->|"Status LED"| Wearer
+
+    Device -->|"Sensor data every 2s<br/>Emergency alerts<br/>Geofence violations"| Cloud
+    Cloud -->|"Real-time sensor streams<br/>Emergency notifications"| App
+    App -->|"Geofence config<br/>Contact CRUD<br/>Alert history"| Cloud
+
+    Guardian -->|"Monitors dashboard<br/>Manages contacts & geofences<br/>Dismisses emergencies"| App
+    App -->|"Live location, sensor data<br/>Emergency alerts<br/>Violation notifications"| Guardian
+
+    App -->|"Tap-to-dial<br/>during emergency"| Contacts
+```
+
+---
+
+## How It Works (Simple)
+
+The **Protected Person** wears a small ESP32 device with a motion sensor and GPS. The device continuously sends location and movement data to **Firebase Cloud**. If the person falls or presses the SOS button, an emergency alert fires instantly.
+
+The **Guardian (Parent)** opens the Flutter mobile app to see a live dashboard — where the person is on a map, whether they're moving, and whether a fall or emergency has been detected. The guardian can set up safe zones (geofences) and gets notified if the wearer leaves or enters them. They can also manage a list of **Emergency Contacts** to call with one tap.
+
+Everything flows through **Firebase** — the device writes data, the app reads it in real time, and persistent records (contacts, geofences, alert history) are stored for later reference.
+
+---
+
+## Key Components
+
+| Component | What It Does |
+|-----------|-------------|
+| **ESP32 Wearable Device** | Reads accelerometer + GPS, detects falls, checks geofences, sends data to Firebase via WiFi. Has a physical SOS button and status LED. |
+| **Flutter Mobile App** | The guardian's app. Shows live dashboard, GPS map, fall detection status, alert history. Manages contacts and geofences. Provisions the device over BLE. |
+| **Firebase Cloud** | Stores and syncs everything. Real-time Database handles live sensor/emergency streams. Firestore handles persistent data (users, contacts, geofences, alerts). |
+| **Protected Person** | The wearer. Their movement generates data; they can press SOS for help. |
+| **Guardian / Parent** | The caregiver. Monitors the protected person, responds to emergencies, configures the system. |
+| **Emergency Contacts** | People the guardian can call with one tap during an emergency. Stored as contacts in the app. |
+
+---
+
+## Data Flow (End to End)
+
+```
+Protected Person
+      │
+      │  Movement + SOS press
+      ▼
+ESP32 Device ──── Sensor data (2s), emergencies ────► Firebase Cloud
+      ▲                                                      │
+      │                                                      │ Real-time streams
+      │  Status LED                                          ▼
+      │                                              Flutter App
+      │                                                   │
+      │                                                   │ Tap-to-dial
+      │                                                   ▼
+      │                                          Emergency Contacts
+      │
+      └────── BLE provisioning (WiFi setup, one-time) ──────┘
+```
+
+---
+
+## Separation of Concerns
+
+| Concern | Handled By |
+|---------|-----------|
+| Sensing movement & location | ESP32 (MPU6050 + NEO-6M GPS) |
+| Detecting falls | ESP32 (on-device, < 2.5g threshold) |
+| Real-time data sync | Firebase Realtime Database |
+| Persistent storage | Firebase Cloud Firestore |
+| User authentication | Firebase Auth (email/password) |
+| Live monitoring UI | Flutter app (6-tab dashboard) |
+| Geofence management | Flutter app (create) + ESP32 (enforce) |
+| Emergency response | Flutter app (notify + tap-to-call) |
+| Device setup | Flutter app ↔ ESP32 via Bluetooth (BLE) |
