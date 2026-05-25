@@ -460,12 +460,15 @@ class _ContactCard extends StatelessWidget {
               children: [
                 Row(
                   children: [
-                    Text(
-                      contact.name,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w700,
-                        color: Color(0xFF1A2340),
-                        fontSize: 14,
+                    Flexible(
+                      child: Text(
+                        contact.name,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF1A2340),
+                          fontSize: 14,
+                        ),
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
                     if (isEmergency) ...[

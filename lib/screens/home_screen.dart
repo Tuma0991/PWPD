@@ -263,13 +263,16 @@ class _DashboardTabState extends State<_DashboardTab> {
           children: [
             const Icon(Icons.shield, color: Colors.white, size: 22),
             const SizedBox(width: 8),
-            const Text(
-              'GuardianNako Dashboard',
-              style: TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.w800,
-                fontSize: 20,
-                letterSpacing: 0.3,
+            const Flexible(
+              child: Text(
+                'GuardianNako Dashboard',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w800,
+                  fontSize: 18,
+                  letterSpacing: 0.3,
+                ),
+                overflow: TextOverflow.ellipsis,
               ),
             ),
           ],

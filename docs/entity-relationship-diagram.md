@@ -4,24 +4,43 @@
 
 *Entity Relationship Diagram of the GuardianNako System*
 
-This system uses **two databases** for different purposes:
-- **Cloud Firestore** — persistent, structured data (users, contacts, geofences, alert history)
-- **Firebase RTDB** — transient, high-frequency data (sensor streams, emergency state, device cache)
-
----
-
-## Firestore Entities (Persistent)
-
-These entities live in Cloud Firestore and follow a document-collection model. All are nested under `/users/{uid}/`.
-
 ```mermaid
 erDiagram
     User {
         string uid PK "Firebase Auth UID"
         string name "Display name"
         string email "Email address"
-        string deviceId "Links to RTDB /devices/{deviceId}"
+        string deviceId FK "→ RTDB Device"
         timestamp createdAt "Account creation time"
+    }
+
+    Device {
+        string deviceId PK "Auto-generated from MAC"
+        boolean online "Derived: last update < 10s ago"
+        timestamp lastSeen "Last sensor push time"
+    }
+
+    SensorReading {
+        string sensorReadId PK "Auto-generated"
+        string deviceId FK "→ Device"
+        float lat "GPS latitude"
+        float lng "GPS longitude"
+        float accelX "Accelerometer X"
+        float accelY "Accelerometer Y"
+        float accelZ "Accelerometer Z"
+        boolean fallDetected "Fall flag"
+        boolean online "Online flag"
+        timestamp timestamp "Server timestamp"
+    }
+
+    EmergencyState {
+        string emergencyStateId PK "Auto-generated"
+        string deviceId FK "→ Device"
+        boolean active "Emergency active flag"
+        string reason "Trigger reason"
+        timestamp triggeredAt "Trigger time"
+        float lat "Emergency location lat"
+        float lng "Emergency location lng"
     }
 
     Contact {
@@ -46,7 +65,7 @@ erDiagram
     Alert {
         string alertId PK "Auto-generated"
         string userId FK "User who receives the alert"
-        string deviceId "Device that triggered the alert"
+        string deviceId FK "Device that triggered"
         enum type "sos | fall | emergency"
         string message "Human-readable alert text"
         string reason "Trigger cause detail"
@@ -55,101 +74,130 @@ erDiagram
         float longitude "GPS lng at time of event"
     }
 
-    User ||--o{ Contact : "has (1:N)"
-    User ||--o{ Geofence : "defines (1:N)"
-    User ||--o{ Alert : "receives (1:N)"
+    GeofenceViolation {
+        string violationId PK "timestamp-based"
+        string deviceId FK "→ RTDB Device"
+        string geofenceId FK "→ Geofence"
+        string name "Geofence name"
+        enum type "entered | exited"
+        float latitude "GPS lat at violation"
+        float longitude "GPS lng at violation"
+        float distance "Distance from boundary (m)"
+        timestamp timestamp "Violation time"
+    }
+
+    User ||--o| Device : "owns"
+    User ||--o{ Contact : "has"
+    User ||--o{ Geofence : "defines"
+    User ||--o{ Alert : "receives"
+    User ||--o{ GeofenceViolation : "receives"
+    Device ||--|| SensorReading : "streams"
+    Device ||--o| EmergencyState : "has"
+    Device ||--o{ Alert : "generates"
+    Device ||--o{ GeofenceViolation : "detects"
+    Geofence ||--o{ GeofenceViolation : "triggers"
+
 ```
 
 ---
 
-## RTDB Structures (Transient)
+## Relationships
 
-The Realtime Database stores live, high-frequency data as a flat JSON tree. These are NOT relational entities — they are hierarchical paths under a device node.
-
-```
-/devices/{deviceId}/
-├── sensors/                              ← Written by ESP32 every 2s
-│   ├── gps/
-│   │   ├── lat: double
-│   │   └── lng: double
-│   ├── accelerometer/
-│   │   ├── x: float
-│   │   ├── y: float
-│   │   └── z: float
-│   ├── fallDetected: boolean
-│   ├── online: boolean
-│   └── timestamp: ServerTimestamp
-├── emergency/                            ← Written by ESP32 on event
-│   ├── active: boolean                   ← Cleared by Mobile App on dismiss
-│   ├── reason: string
-│   ├── triggeredAt: ServerTimestamp
-│   ├── lat: double
-│   └── lng: double
-├── geofences/                            ← Synced from Firestore by Mobile App
-│   └── [{ id, name, lat, lng, radius }, ...]
-└── geofence_violations/                  ← Written by ESP32 every 30s
-    └── {timestamp}/
-        ├── geofenceId: string
-        ├── name: string
-        ├── type: "entered" | "exited"
-        ├── lat: double
-        ├── lng: double
-        ├── distance: double
-        └── timestamp: ServerTimestamp
-```
+| Parent | Verb | Child | Cardinality |
+|--------|------|-------|-------------|
+| User | owns | Device | One User owns zero or one Device (optional until BLE provisioning is complete) |
+| User | has | Contact | One User has zero to many Contacts |
+| User | defines | Geofence | One User defines zero to many Geofences |
+| User | receives | Alert | One User receives zero to many Alerts |
+| User | receives | GeofenceViolation | One User receives zero to many Geofence Violations |
+| Device | streams | SensorReading | One Device streams exactly one set of Sensor Readings |
+| Device | has | EmergencyState | One Device has zero or one active Emergency State |
+| Device | generates | Alert | One Device generates zero to many Alerts |
+| Device | detects | GeofenceViolation | One Device detects zero to many Geofence Violations |
+| Geofence | triggers | GeofenceViolation | One Geofence triggers zero to many Geofence Violations |
 
 ---
 
-## How the Two Databases Connect
+## DFD Data Store to ERD Entity Mapping
 
-There is only **one link** between Firestore and RTDB:
-
-```
-User.deviceId (Firestore)  ──────>  /devices/{deviceId} (RTDB)
-```
-
-When the guardian provisions a device via BLE, the ESP32's auto-generated device ID is saved to the User document in Firestore. From that point on, the app knows which RTDB path to listen to for live sensor data, emergency state, and geofence violations.
+| DFD Store | ERD Entity | Database | Notes |
+|-----------|-----------|----------|-------|
+| D1 — Sensor Readings | SensorReading | RTDB | Overwritten every 2s by ESP32 |
+| D2 — Emergency State | EmergencyState | RTDB | Only exists while emergency is active |
+| D3 — Device Geofences | *(cached under Device)* | RTDB | Simplified copy of Geofence (vertices→point+radius), synced by Mobile App |
+| D4 — Geofence Violations | GeofenceViolation | RTDB | Written by ESP32 every 30s check |
+| D5 — Users | User | Firestore | Created on first sign-up |
+| D6 — Contacts | Contact | Firestore | Subcollection under User |
+| D7 — Geofence Definitions | Geofence | Firestore | Source of truth; D3 is the RTDB cache of this |
+| D8 — Alert History | Alert | Firestore | Logged when EmergencyState is dismissed |
+| D9 — Device Config | *(ESP32 NVS flash)* | NVS | wifi_ssid, wifi_pass, device_id; local to device, not in Firebase |
 
 ---
 
 ## Entity Descriptions
 
-### User (Firestore)
-Represents a registered guardian account. Created on first sign-up via Firebase Auth. Stored at `/users/{uid}/`. The `deviceId` field links to the RTDB device node.
+### User (Firestore → D5)
+A registered guardian account. Created on first sign-up via Firebase Auth. The `deviceId` field is populated after BLE provisioning and links to the RTDB Device node. All Firestore subcollections (Contacts, Geofences, Alerts) are nested under this document.
 
-### Contact (Firestore)
-Emergency and regular contacts managed by the guardian. Stored as a subcollection at `/users/{uid}/contacts/{contactId}/`. Contacts flagged with `isEmergencyContact = true` appear in a prioritized section and can be dialed via tap-to-call.
+### Device (RTDB — parent of D1–D4)
+The ESP32 wearable, represented at `/devices/{deviceId}/` in the Realtime Database. Serves as the parent container for SensorReading, EmergencyState, cached geofences, and GeofenceViolation data. Online status is derived from timestamp staleness (last update > 10s = offline). The Device has no Firestore document.
 
-### Geofence (Firestore)
-A virtual geographic boundary defined by a polygon of GPS vertices. Stored at `/users/{uid}/geofences/{geofenceId}/`. When enabled, the Mobile App syncs a simplified point+radius version to RTDB for the ESP32 to enforce.
+### SensorReading (RTDB → D1)
+Live sensor data streamed by the ESP32 every 2 seconds to `/devices/{deviceId}/sensors/`. Includes GPS coordinates, 3-axis accelerometer values, a fall detection flag, and an online heartbeat. Completely transient — never persisted to Firestore.
 
-### Alert (Firestore)
-A historical record of an emergency event (SOS press, fall detection, or geofence violation). Logged when an emergency is dismissed. Stored at `/users/{uid}/alerts/{alertId}/`. Each alert records the event type, reason, timestamp, and GPS location.
+### EmergencyState (RTDB → D2)
+The active emergency record at `/devices/{deviceId}/emergency/`. Written by the ESP32 when an SOS button press or fall is detected. The guardian's app displays this as a red banner. When dismissed, `active` is set to false and the event is logged permanently to Alert (D8). Only one emergency can be active at a time.
 
-### Device (RTDB — not a Firestore entity)
-The ESP32 wearable is represented in RTDB under `/devices/{deviceId}/`. It has no Firestore document. Its sub-paths hold live sensor readings, active emergency state, a cached geofence array for on-device enforcement, and geofence violation logs. Online status is derived: if the last sensor timestamp is older than 10 seconds, the device is considered offline.
+### Contact (Firestore → D6)
+An emergency or regular contact managed by the guardian. Stored at `/users/{uid}/contacts/{contactId}/`. Contacts flagged `isEmergencyContact = true` appear prioritized and can be dialed via tap-to-call.
 
-### Geofence Violations (RTDB — not a Firestore entity)
-Violation records are written directly by the ESP32 to RTDB at `/devices/{deviceId}/geofence_violations/{timestamp}/`. They are transient and not synced to Firestore. The guardian views them in real time via the RTDB stream.
+### Geofence (Firestore → D7, also source for D3)
+A virtual geographic boundary defined as a polygon of GPS vertices. Stored at `/users/{uid}/geofences/{geofenceId}/`. This is the **source of truth**. When saved, the Mobile App transforms the polygon to a point+radius and syncs it to RTDB at `/devices/{deviceId}/geofences/` (D3) so the ESP32 can enforce it with Haversine distance checks.
+
+### Alert (Firestore → D8)
+A permanent historical record of an emergency event. Created at `/users/{uid}/alerts/{alertId}/` when the guardian dismisses an active EmergencyState (D2). The RTDB emergency is the "live" version; the Firestore Alert is the "logged" version kept for history.
+
+### GeofenceViolation (RTDB → D4)
+A real-time record of a geofence boundary crossing, written directly by the ESP32 to `/devices/{deviceId}/geofence_violations/{timestamp}/`. Transient RTDB-only data — not synced to Firestore. The guardian views violations in real time via the RTDB stream.
+
+---
+
+## RTDB Tree Structure
+
+The Device and its child entities are stored hierarchically in RTDB:
+
+```
+/devices/{deviceId}/
+├── sensors/                              ← SensorReading (D1)
+│   ├── gps/{ lat, lng }
+│   ├── accelerometer/{ x, y, z }
+│   ├── fallDetected, online, timestamp
+├── emergency/                            ← EmergencyState (D2)
+│   ├── active, reason, triggeredAt, lat, lng
+├── geofences/                            ← Geofence cache (D3)
+│   └── [{ id, name, lat, lng, radius }]
+└── geofence_violations/                  ← GeofenceViolation (D4)
+    └── {timestamp}/{ geofenceId, name, type, lat, lng, distance }
+```
 
 ---
 
 ## RTDB vs Firestore Mapping
 
-| RTDB Path | Purpose | Persistent Copy in Firestore |
+| RTDB Path | Purpose | Persistent Copy (Firestore) |
 |-----------|---------|------------------------------|
-| `/devices/{deviceId}/sensors/` | Live sensor stream (2s interval) | None (transient) |
-| `/devices/{deviceId}/emergency/` | Active emergency state | `/users/{uid}/alerts/{alertId}/` (on dismiss) |
-| `/devices/{deviceId}/geofences/` | Cached geofence array for ESP32 | `/users/{uid}/geofences/{geofenceId}/` (source of truth) |
-| `/devices/{deviceId}/geofence_violations/` | Violation log from ESP32 | None (transient, RTDB-only) |
+| `sensors/` (D1) | Live sensor stream | None (transient) |
+| `emergency/` (D2) | Active emergency state | `/users/{uid}/alerts/{alertId}/` (D8, on dismiss) |
+| `geofences/` (D3) | Cached array for ESP32 | `/users/{uid}/geofences/{geofenceId}/` (D7, source of truth) |
+| `geofence_violations/` (D4) | Violation events | None (RTDB-only, transient) |
 
 ---
 
 ## Data Integrity Notes
 
-- **Firestore subcollections**: Contacts, Geofences, and Alerts are subcollections under `/users/{uid}/`. The parent User UID is the implicit foreign key.
-- **Cascading deletes**: Firestore does not auto-delete subcollections when a parent document is deleted. The app handles cleanup manually.
-- **RTDB as cache**: The geofence array at `/devices/{deviceId}/geofences/` is a denormalized cache. Firestore is the source of truth; RTDB is what the ESP32 reads.
-- **Geofence sync transformation**: Polygon vertices in Firestore are simplified to point+radius when synced to RTDB. The ESP32 uses Haversine distance checks, not full point-in-polygon calculations.
-- **Offline detection**: Device online status is derived from timestamp staleness (last update > 10s = offline), not a stored field.
-- **Alert deduplication**: ESP32 prevents re-triggering an already-active emergency. The app deduplicates by `triggeredAt` timestamp and suppresses fall alerts within 3 seconds of an SOS press.
+- **Firestore subcollections**: Contacts, Geofences, and Alerts are nested under `/users/{uid}/`. The parent User UID is the implicit foreign key, also stored explicitly on each child for query convenience.
+- **Cascading deletes**: Firestore does not auto-delete subcollections when a parent document is removed. The app handles cleanup manually.
+- **Geofence sync (D7 → D3)**: Polygon vertices in Firestore are simplified to point+radius when synced to RTDB. The ESP32 uses Haversine distance, not full point-in-polygon.
+- **Offline detection**: Device online status is derived (last update > 10s = offline), not a stored field. No separate heartbeat mechanism.
+- **Alert deduplication**: ESP32 prevents re-triggering an already-active emergency. The app deduplicates by `triggeredAt` and suppresses fall alerts within 3 seconds of an SOS press.
+- **D9 (ESP32 NVS)**: Device configuration lives in the ESP32's non-volatile storage, not in Firebase. It holds WiFi credentials and the device ID across power cycles.

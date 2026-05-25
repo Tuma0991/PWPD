@@ -201,12 +201,12 @@ class _AuthScreenState extends State<AuthScreen>
                     ),
                     const SizedBox(height: 20),
                     // Feature pills
-                    Row(
-                      children: [
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: const [
                         _FeaturePill(icon: Icons.sensors, label: 'Fall Detection'),
-                        const SizedBox(width: 8),
                         _FeaturePill(icon: Icons.gps_fixed, label: 'Live GPS'),
-                        const SizedBox(width: 8),
                         _FeaturePill(icon: Icons.notifications_active, label: 'SOS Alerts'),
                       ],
                     ),

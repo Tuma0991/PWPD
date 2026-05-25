@@ -144,26 +144,23 @@ graph TB
     D5[("D5: Users<br/>(Cloud Firestore)")]
     D9[("D9: Device Config<br/>(ESP32 NVS)")]
 
-    P61("6.1<br/>Scan & Select<br/>Guardian Device<br/><i>Mobile App</i>")
-    P62("6.2<br/>Connect BLE GATT<br/>& Exchange Data<br/><i>Mobile App ↔ ESP32</i>")
-    P63("6.3<br/>Save Config &<br/>Register Device<br/><i>Mobile App</i>")
+    P61("6.1<br/>Scan & Select<br/>Device<br/><i>Mobile App</i>")
+    P62("6.2<br/>Establish BLE<br/>GATT Connection<br/><i>Mobile App ↔ ESP32</i>")
+    P63("6.3<br/>Send WiFi<br/>Credentials<br/><i>Mobile App → ESP32</i>")
+    P64("6.4<br/>Confirm Connection<br/>& Register Device<br/><i>Mobile App</i>")
 
     GC -->|"Tap 'Set Up Device',<br/>grant BLE permissions"| P61
     P61 -->|"BLE scan results<br/>(filter Guardian_*)"| GC
     GC -->|"Select device,<br/>enter SSID + password"| P62
 
-    P62 -->|"1. Connect BLE GATT"| P62
-    P62 -->|"2. Read device info char<br/>{deviceId, name, version}"| P62
-    P62 -->|"3. Subscribe to status notify"| P62
-    P62 -->|"4. Write WiFi creds char<br/>{ssid, password}"| P62
-    P62 -->|"5. Wait for 'connected' notify"| P62
-    P62 -->|"WiFi credentials"| D9
+    P62 -->|"BLE connect +<br/>read device info<br/>{deviceId, name, version}"| GC
+    P62 -->|"SSID + password<br/>passed to next step"| P63
 
-    P62 -->|"Device info +<br/>provisioning status"| GC
+    P63 -->|"Write WiFi creds char<br/>{ssid, password}"| D9
 
-    P63 -->|"Save device ID &<br/>name to SharedPrefs"| P63
-    P63 -->|"updateUserDeviceId()"| D5
-    P63 -->|"Success / Error"| GC
+    D9 -->|"Connection status<br/>notify"| P64
+    P64 -->|"Device ID to<br/>User document"| D5
+    P64 -->|"Success / Error"| GC
 ```
 
 ---
@@ -211,7 +208,7 @@ graph TB
 |------|-------|------|------------|---------|
 | `/users/{uid}/name` | Display name | `string` | Auth flow | P3.1 |
 | `/users/{uid}/email` | Email address | `string` | Auth flow | — |
-| `/users/{uid}/deviceId` | Linked device | `string` | P6.3 | P3.1 |
+| `/users/{uid}/deviceId` | Linked device | `string` | P6.4 | P3.1 |
 
 ### D6 — Contacts (Cloud Firestore)
 
@@ -248,8 +245,8 @@ graph TB
 
 | Key | Value | Written By | Read By |
 |-----|-------|------------|---------|
-| `wifi_ssid` | WiFi network name | P6.2 (BLE provisioning) | P1 (ESP32 boot) |
-| `wifi_pass` | WiFi password | P6.2 (BLE provisioning) | P1 (ESP32 boot) |
+| `wifi_ssid` | WiFi network name | P6.3 (BLE provisioning) | P1 (ESP32 boot) |
+| `wifi_pass` | WiFi password | P6.3 (BLE provisioning) | P1 (ESP32 boot) |
 | `device_id` | Auto-generated device ID | P1 (first boot) | P1.4, P6.2 |
 
 ---
@@ -274,5 +271,6 @@ graph TB
 | 4.3 | Check Violations | ESP32 | Every 30s | D3 | D4 |
 | 5.0 | Manage Contacts | Mobile App | On user action | Contact form data | D6 + UI |
 | 6.1 | Scan & Select Device | Mobile App | On setup | BLE advertisements | Device list |
-| 6.2 | Connect & Exchange | Mobile App ↔ ESP32 | Per provisioning | BLE GATT | WiFi creds + status |
-| 6.3 | Save & Register | Mobile App | Post-provisioning | Device info | SharedPrefs + D5 |
+| 6.2 | Establish BLE Connection | Mobile App ↔ ESP32 | Per provisioning | BLE GATT | Device info |
+| 6.3 | Send WiFi Credentials | Mobile App → ESP32 | Per provisioning | SSID + password | D9 |
+| 6.4 | Register Device | Mobile App | Post-provisioning | Device ID | D5 |
