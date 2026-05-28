@@ -1,7 +1,6 @@
 ---
 name: frontend-patterns
-description: Frontend development patterns for React, Next.js, state management, performance optimization, and UI best practices.
-origin: ECC
+description: Frontend development patterns for Flutter/Dart and React/Next.js — widget composition, state management (setState, Provider, Riverpod), performance optimization, and UI best practices for the Guardian IoT platform.
 ---
 
 # Frontend Development Patterns
@@ -123,11 +122,11 @@ export function DataLoader<T>({ url, children }: DataLoaderProps<T>) {
 }
 
 // Usage
-<DataLoader<Market[]> url="/api/markets">
-  {(markets, loading, error) => {
+<DataLoader<DeviceData[]> url="/api/devices">
+  {(devices, loading, error) => {
     if (loading) return <Spinner />
     if (error) return <Error error={error} />
-    return <MarketList markets={markets!} />
+    return <DeviceDataList devices={devices!} />
   }}
 </DataLoader>
 ```
@@ -196,11 +195,11 @@ export function useQuery<T>(
 }
 
 // Usage
-const { data: markets, loading, error, refetch } = useQuery(
-  'markets',
-  () => fetch('/api/markets').then(r => r.json()),
+const { data: devices, loading, error, refetch } = useQuery(
+  'devices',
+  () => fetch('/api/devices').then(r => r.json()),
   {
-    onSuccess: data => console.log('Fetched', data.length, 'markets'),
+    onSuccess: data => console.log('Fetched', data.length, 'devices'),
     onError: err => console.error('Failed:', err)
   }
 )
@@ -240,22 +239,22 @@ useEffect(() => {
 
 ```typescript
 interface State {
-  markets: Market[]
-  selectedMarket: Market | null
+  devices: DeviceData[]
+  selectedDeviceData: DeviceData | null
   loading: boolean
 }
 
 type Action =
-  | { type: 'SET_MARKETS'; payload: Market[] }
-  | { type: 'SELECT_MARKET'; payload: Market }
+  | { type: 'SET_DEVICES'; payload: DeviceData[] }
+  | { type: 'SELECT_DEVICE'; payload: DeviceData }
   | { type: 'SET_LOADING'; payload: boolean }
 
 function reducer(state: State, action: Action): State {
   switch (action.type) {
-    case 'SET_MARKETS':
-      return { ...state, markets: action.payload }
-    case 'SELECT_MARKET':
-      return { ...state, selectedMarket: action.payload }
+    case 'SET_DEVICES':
+      return { ...state, devices: action.payload }
+    case 'SELECT_DEVICE':
+      return { ...state, selectedDeviceData: action.payload }
     case 'SET_LOADING':
       return { ...state, loading: action.payload }
     default:
@@ -263,28 +262,28 @@ function reducer(state: State, action: Action): State {
   }
 }
 
-const MarketContext = createContext<{
+const DeviceDataContext = createContext<{
   state: State
   dispatch: Dispatch<Action>
 } | undefined>(undefined)
 
-export function MarketProvider({ children }: { children: React.ReactNode }) {
+export function DeviceDataProvider({ children }: { children: React.ReactNode }) {
   const [state, dispatch] = useReducer(reducer, {
-    markets: [],
-    selectedMarket: null,
+    devices: [],
+    selectedDeviceData: null,
     loading: false
   })
 
   return (
-    <MarketContext.Provider value={{ state, dispatch }}>
+    <DeviceDataContext.Provider value={{ state, dispatch }}>
       {children}
-    </MarketContext.Provider>
+    </DeviceDataContext.Provider>
   )
 }
 
-export function useMarkets() {
-  const context = useContext(MarketContext)
-  if (!context) throw new Error('useMarkets must be used within MarketProvider')
+export function useDeviceDatas() {
+  const context = useContext(DeviceDataContext)
+  if (!context) throw new Error('useDeviceDatas must be used within DeviceDataProvider')
   return context
 }
 ```
@@ -295,9 +294,9 @@ export function useMarkets() {
 
 ```typescript
 // PASS: useMemo for expensive computations
-const sortedMarkets = useMemo(() => {
-  return markets.sort((a, b) => b.volume - a.volume)
-}, [markets])
+const sortedDeviceDatas = useMemo(() => {
+  return devices.sort((a, b) => b.batteryLevel - a.batteryLevel)
+}, [devices])
 
 // PASS: useCallback for functions passed to children
 const handleSearch = useCallback((query: string) => {
@@ -305,11 +304,11 @@ const handleSearch = useCallback((query: string) => {
 }, [])
 
 // PASS: React.memo for pure components
-export const MarketCard = React.memo<MarketCardProps>(({ market }) => {
+export const DeviceDataCard = React.memo<DeviceDataCardProps>(({ device }) => {
   return (
-    <div className="market-card">
-      <h3>{market.name}</h3>
-      <p>{market.description}</p>
+    <div className="device-card">
+      <h3>{device.name}</h3>
+      <p>{device.description}</p>
     </div>
   )
 })
@@ -344,11 +343,11 @@ export function Dashboard() {
 ```typescript
 import { useVirtualizer } from '@tanstack/react-virtual'
 
-export function VirtualMarketList({ markets }: { markets: Market[] }) {
+export function VirtualDeviceDataList({ devices }: { devices: DeviceData[] }) {
   const parentRef = useRef<HTMLDivElement>(null)
 
   const virtualizer = useVirtualizer({
-    count: markets.length,
+    count: devices.length,
     getScrollElement: () => parentRef.current,
     estimateSize: () => 100,  // Estimated row height
     overscan: 5  // Extra items to render
@@ -374,7 +373,7 @@ export function VirtualMarketList({ markets }: { markets: Market[] }) {
               transform: `translateY(${virtualRow.start}px)`
             }}
           >
-            <MarketCard market={markets[virtualRow.index]} />
+            <DeviceDataCard device={devices[virtualRow.index]} />
           </div>
         ))}
       </div>
@@ -400,7 +399,7 @@ interface FormErrors {
   endDate?: string
 }
 
-export function CreateMarketForm() {
+export function CreateDeviceDataForm() {
   const [formData, setFormData] = useState<FormData>({
     name: '',
     description: '',
@@ -436,7 +435,7 @@ export function CreateMarketForm() {
     if (!validate()) return
 
     try {
-      await createMarket(formData)
+      await createDeviceData(formData)
       // Success handling
     } catch (error) {
       // Error handling
@@ -448,13 +447,13 @@ export function CreateMarketForm() {
       <input
         value={formData.name}
         onChange={e => setFormData(prev => ({ ...prev, name: e.target.value }))}
-        placeholder="Market name"
+        placeholder="DeviceData name"
       />
       {errors.name && <span className="error">{errors.name}</span>}
 
       {/* Other fields */}
 
-      <button type="submit">Create Market</button>
+      <button type="submit">Create DeviceData</button>
     </form>
   )
 }
@@ -516,18 +515,18 @@ export class ErrorBoundary extends React.Component<
 import { motion, AnimatePresence } from 'framer-motion'
 
 // PASS: List animations
-export function AnimatedMarketList({ markets }: { markets: Market[] }) {
+export function AnimatedDeviceDataList({ devices }: { devices: DeviceData[] }) {
   return (
     <AnimatePresence>
-      {markets.map(market => (
+      {devices.map(device => (
         <motion.div
-          key={market.id}
+          key={device.id}
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: -20 }}
           transition={{ duration: 0.3 }}
         >
-          <MarketCard market={market} />
+          <DeviceDataCard market={market} />
         </motion.div>
       ))}
     </AnimatePresence>

@@ -1,7 +1,6 @@
 ---
 name: backend-patterns
-description: Backend architecture patterns, API design, database optimization, and server-side best practices for Node.js, Express, and Next.js API routes.
-origin: ECC
+description: Backend architecture patterns for Firebase, Firestore, RTDB, and server-side best practices. Covers database optimization, caching, error handling, auth, and background processing for the Guardian IoT platform.
 ---
 
 # Backend Development Patterns
@@ -24,32 +23,32 @@ Backend architecture patterns and best practices for scalable server-side applic
 
 ```typescript
 // PASS: Resource-based URLs
-GET    /api/markets                 # List resources
-GET    /api/markets/:id             # Get single resource
-POST   /api/markets                 # Create resource
-PUT    /api/markets/:id             # Replace resource
-PATCH  /api/markets/:id             # Update resource
-DELETE /api/markets/:id             # Delete resource
+GET    /api/devices                 # List resources
+GET    /api/devices/:id             # Get single resource
+POST   /api/devices                 # Create resource
+PUT    /api/devices/:id             # Replace resource
+PATCH  /api/devices/:id             # Update resource
+DELETE /api/devices/:id             # Delete resource
 
 // PASS: Query parameters for filtering, sorting, pagination
-GET /api/markets?status=active&sort=volume&limit=20&offset=0
+GET /api/devices?status=active&sort=batteryLevel&limit=20&offset=0
 ```
 
 ### Repository Pattern
 
 ```typescript
 // Abstract data access logic
-interface MarketRepository {
-  findAll(filters?: MarketFilters): Promise<Market[]>
-  findById(id: string): Promise<Market | null>
-  create(data: CreateMarketDto): Promise<Market>
-  update(id: string, data: UpdateMarketDto): Promise<Market>
+interface DeviceDataRepository {
+  findAll(filters?: DeviceDataFilters): Promise<DeviceData[]>
+  findById(id: string): Promise<DeviceData | null>
+  create(data: CreateDeviceDataDto): Promise<DeviceData>
+  update(id: string, data: UpdateDeviceDataDto): Promise<DeviceData>
   delete(id: string): Promise<void>
 }
 
-class SupabaseMarketRepository implements MarketRepository {
-  async findAll(filters?: MarketFilters): Promise<Market[]> {
-    let query = supabase.from('markets').select('*')
+class SupabaseDeviceDataRepository implements DeviceDataRepository {
+  async findAll(filters?: DeviceDataFilters): Promise<DeviceData[]> {
+    let query = supabase.from('devices').select('*')
 
     if (filters?.status) {
       query = query.eq('status', filters.status)
@@ -73,19 +72,19 @@ class SupabaseMarketRepository implements MarketRepository {
 
 ```typescript
 // Business logic separated from data access
-class MarketService {
-  constructor(private marketRepo: MarketRepository) {}
+class DeviceDataService {
+  constructor(private marketRepo: DeviceDataRepository) {}
 
-  async searchMarkets(query: string, limit: number = 10): Promise<Market[]> {
+  async searchDeviceDatas(query: string, limit: number = 10): Promise<DeviceData[]> {
     // Business logic
     const embedding = await generateEmbedding(query)
     const results = await this.vectorSearch(embedding, limit)
 
     // Fetch full data
-    const markets = await this.marketRepo.findByIds(results.map(r => r.id))
+    const devices = await this.marketRepo.findByIds(results.map(r => r.id))
 
     // Sort by similarity
-    return markets.sort((a, b) => {
+    return devices.sort((a, b) => {
       const scoreA = results.find(r => r.id === a.id)?.score || 0
       const scoreB = results.find(r => r.id === b.id)?.score || 0
       return scoreA - scoreB
@@ -133,15 +132,15 @@ export default withAuth(async (req, res) => {
 ```typescript
 // PASS: GOOD: Select only needed columns
 const { data } = await supabase
-  .from('markets')
-  .select('id, name, status, volume')
+  .from('devices')
+  .select('id, name, status, batteryLevel')
   .eq('status', 'active')
-  .order('volume', { ascending: false })
+  .order('batteryLevel', { ascending: false })
   .limit(10)
 
 // FAIL: BAD: Select everything
 const { data } = await supabase
-  .from('markets')
+  .from('devices')
   .select('*')
 ```
 
@@ -149,27 +148,27 @@ const { data } = await supabase
 
 ```typescript
 // FAIL: BAD: N+1 query problem
-const markets = await getMarkets()
-for (const market of markets) {
-  market.creator = await getUser(market.creator_id)  // N queries
+const devices = await getDeviceDatas()
+for (const device of devices) {
+  device.creator = await getUser(device.creator_id)  // N queries
 }
 
 // PASS: GOOD: Batch fetch
-const markets = await getMarkets()
-const creatorIds = markets.map(m => m.creator_id)
+const devices = await getDeviceDatas()
+const creatorIds = devices.map(m => m.creator_id)
 const creators = await getUsers(creatorIds)  // 1 query
 const creatorMap = new Map(creators.map(c => [c.id, c]))
 
-markets.forEach(market => {
-  market.creator = creatorMap.get(market.creator_id)
+devices.forEach(device => {
+  device.creator = creatorMap.get(device.creator_id)
 })
 ```
 
 ### Transaction Pattern
 
 ```typescript
-async function createMarketWithPosition(
-  marketData: CreateMarketDto,
+async function createDeviceDataWithPosition(
+  marketData: CreateDeviceDataDto,
   positionData: CreatePositionDto
 ) {
   // Use Supabase transaction
@@ -192,7 +191,7 @@ LANGUAGE plpgsql
 AS $$
 BEGIN
   -- Start transaction automatically
-  INSERT INTO markets VALUES (market_data);
+  INSERT INTO devices VALUES (market_data);
   INSERT INTO positions VALUES (position_data);
   RETURN jsonb_build_object('success', true);
 EXCEPTION
@@ -208,33 +207,33 @@ $$;
 ### Redis Caching Layer
 
 ```typescript
-class CachedMarketRepository implements MarketRepository {
+class CachedDeviceDataRepository implements DeviceDataRepository {
   constructor(
-    private baseRepo: MarketRepository,
+    private baseRepo: DeviceDataRepository,
     private redis: RedisClient
   ) {}
 
-  async findById(id: string): Promise<Market | null> {
+  async findById(id: string): Promise<DeviceData | null> {
     // Check cache first
-    const cached = await this.redis.get(`market:${id}`)
+    const cached = await this.redis.get(`device:${id}`)
 
     if (cached) {
       return JSON.parse(cached)
     }
 
     // Cache miss - fetch from database
-    const market = await this.baseRepo.findById(id)
+    const device = await this.baseRepo.findById(id)
 
     if (market) {
       // Cache for 5 minutes
-      await this.redis.setex(`market:${id}`, 300, JSON.stringify(market))
+      await this.redis.setex(`device:${id}`, 300, JSON.stringify(market))
     }
 
-    return market
+    return device
   }
 
   async invalidateCache(id: string): Promise<void> {
-    await this.redis.del(`market:${id}`)
+    await this.redis.del(`device:${id}`)
   }
 }
 ```
@@ -242,22 +241,22 @@ class CachedMarketRepository implements MarketRepository {
 ### Cache-Aside Pattern
 
 ```typescript
-async function getMarketWithCache(id: string): Promise<Market> {
-  const cacheKey = `market:${id}`
+async function getDeviceDataWithCache(id: string): Promise<DeviceData> {
+  const cacheKey = `device:${id}`
 
   // Try cache
   const cached = await redis.get(cacheKey)
   if (cached) return JSON.parse(cached)
 
   // Cache miss - fetch from DB
-  const market = await db.markets.findUnique({ where: { id } })
+  const device = await db.devices.findUnique({ where: { id } })
 
-  if (!market) throw new Error('Market not found')
+  if (!device) throw new Error('DeviceData not found')
 
   // Update cache
-  await redis.setex(cacheKey, 300, JSON.stringify(market))
+  await redis.setex(cacheKey, 300, JSON.stringify(device))
 
-  return market
+  return device
 }
 ```
 
@@ -514,7 +513,7 @@ class JobQueue<T> {
   }
 }
 
-// Usage for indexing markets
+// Usage for indexing devices
 interface IndexJob {
   marketId: string
 }
@@ -579,17 +578,17 @@ const logger = new Logger()
 export async function GET(request: Request) {
   const requestId = crypto.randomUUID()
 
-  logger.info('Fetching markets', {
+  logger.info('Fetching devices', {
     requestId,
     method: 'GET',
-    path: '/api/markets'
+    path: '/api/devices'
   })
 
   try {
-    const markets = await fetchMarkets()
-    return NextResponse.json({ success: true, data: markets })
+    const devices = await fetchDeviceDatas()
+    return NextResponse.json({ success: true, data: devices })
   } catch (error) {
-    logger.error('Failed to fetch markets', error as Error, { requestId })
+    logger.error('Failed to fetch devices', error as Error, { requestId })
     return NextResponse.json({ error: 'Internal error' }, { status: 500 })
   }
 }

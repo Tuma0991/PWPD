@@ -126,7 +126,7 @@ flutter run
 
 **Test each screen:**
 - ✅ Dashboard → Should show device data from Firebase
-- ✅ Map → Should show device location (requires Google Maps API key)
+- ✅ Map → Should show device location (uses free OpenStreetMap tiles)
 - ✅ Sensors → Should show accelerometer data
 - ✅ Alerts → Should show alert history
 - ✅ Contacts → Should allow adding emergency contacts
@@ -171,8 +171,8 @@ flutter run
 
 ## 🆘 Troubleshooting
 
-### **"Map screen crashes"**
-→ Missing Google Maps API key. Complete **STEP 1** above.
+### **"Map screen is blank or not loading"**
+→ Check internet connection. OpenStreetMap tiles require network access. No API key needed.
 
 ### **"Device is offline / no data showing"**
 → Check these:
@@ -242,7 +242,7 @@ lib/
 ## 📝 Important Notes for Capstone
 
 - **Keep Firebase rules OPEN for testing** (change to restrictive rules for production)
-- **Google Maps API key should NOT be committed to GitHub** (use env variables in production)
+- **WiFi/API keys should NOT be committed to GitHub** (use env variables or .gitignore in production)
 - **ESP32 WiFi password also should NOT be in public code** (use provisioning in production)
 - Document all API keys and secrets in a `.env` file (add to `.gitignore`)
 

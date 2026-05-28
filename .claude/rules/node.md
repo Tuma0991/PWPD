@@ -1,43 +1,33 @@
-# Node.js Rules for everything-claude-code
+# Dart/Flutter Rules for Guardian IoT
 
-> Project-specific rules for the ECC codebase. Extends common rules.
+> Project-specific rules for the Guardian IoT codebase. Extends common rules.
 
 ## Stack
 
-- **Runtime**: Node.js >=18 (no transpilation, plain CommonJS)
-- **Test runner**: `node tests/run-all.js` — individual files via `node tests/**/*.test.js`
-- **Linter**: ESLint (`@eslint/js`, flat config)
-- **Coverage**: c8
-- **Lint**: markdownlint-cli for `.md` files
+- **Primary Language**: Dart (Flutter)
+- **Firmware**: C++ (Arduino, PlatformIO)
+- **Backend**: Firebase (Firestore, RTDB, Auth)
+- **Test runner**: `flutter test` for widget/unit tests
+- **Analysis**: `flutter analyze` (lints from flutter_lints)
 
 ## File Conventions
 
-- `scripts/` — Node.js utilities, hooks. CommonJS (`require`/`module.exports`)
-- `agents/`, `commands/`, `skills/`, `rules/` — Markdown with YAML frontmatter
-- `tests/` — Mirror the `scripts/` structure. Test files named `*.test.js`
-- File naming: **lowercase with hyphens** (e.g. `session-start.js`, `post-edit-format.js`)
+- Dart: `snake_case` filenames (e.g. `firebase_service.dart`, `device_data.dart`)
+- C++: `snake_case` or `kebab-case` filenames (e.g. `guardian_firmware.ino`)
+- Test files: `*_test.dart` in the `test/` directory
 
 ## Code Style
 
-- CommonJS only — no ESM (`import`/`export`) unless file ends in `.mjs`
-- No TypeScript — plain `.js` throughout
-- Prefer `const` over `let`; never `var`
-- Keep hook scripts under 200 lines — extract helpers to `scripts/lib/`
-- All hooks must `exit 0` on non-critical errors (never block tool execution unexpectedly)
-
-## Hook Development
-
-- Hook scripts normally receive JSON on stdin, but hooks routed through `scripts/hooks/run-with-flags.js` can export `run(rawInput)` and let the wrapper handle parsing/gating
-- Async hooks: mark `"async": true` in `settings.json` with a timeout ≤30s
-- Blocking hooks (PreToolUse, stop): keep fast (<200ms) — no network calls
-- Use `run-with-flags.js` wrapper for all hooks so `ECC_HOOK_PROFILE` and `ECC_DISABLED_HOOKS` runtime gating works
-- Always exit 0 on parse errors; log to stderr with `[HookName]` prefix
+- Dart 3+ — null safety, records, patterns, sealed classes where applicable
+- Prefer `const` constructors; never `var` when you can use `final`
+- Keep widgets under 200 lines — extract to separate widget files
+- No hardcoded Firebase config or device IDs
 
 ## Testing Requirements
 
-- Run `node tests/run-all.js` before committing
-- New scripts in `scripts/lib/` require a matching test in `tests/lib/`
-- New hooks require at least one integration test in `tests/hooks/`
+- Run `flutter test` before committing
+- New services require matching tests
+- Firebase-dependent code should use Firebase emulators or mocks
 
 ## Markdown / Agent Files
 

@@ -63,7 +63,7 @@ Flutter App  ↔ Firebase Auth (email/password)
 
 ### Maps
 
-Uses `flutter_map` with OpenStreetMap tiles (no API key required). NOT Google Maps — the README references Google Maps setup but the actual code uses OpenStreetMap via `flutter_map` + `flutter_map_cancellable_tile_provider`.
+Uses `flutter_map` with OpenStreetMap tiles (no API key required) via `flutter_map_cancellable_tile_provider`.
 
 ## ESP32 Firmware
 

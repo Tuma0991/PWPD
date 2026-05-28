@@ -1,7 +1,6 @@
 ---
 name: strategic-compact
 description: Suggests manual context compaction at logical intervals to preserve context through task phases rather than arbitrary auto-compaction.
-origin: ECC
 ---
 
 # Strategic Compact Skill
@@ -98,6 +97,6 @@ Understanding what persists helps you compact with confidence:
 
 ## Related
 
-- [The Longform Guide](https://x.com/affaanmustafa/status/2014040193557471352) — Token optimization section
+- The Longform Guide — Token optimization section
 - Memory persistence hooks — For state that survives compaction
 - `continuous-learning` skill — Extracts patterns before session ends

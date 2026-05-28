@@ -1,7 +1,6 @@
 ---
 name: e2e-testing
-description: Playwright E2E testing patterns, Page Object Model, configuration, CI/CD integration, artifact management, and flaky test strategies.
-origin: ECC
+description: E2E testing patterns for Flutter integration tests and Playwright. Covers Page Object Model, CI/CD integration, artifact management, and flaky test strategies for the Guardian IoT platform.
 ---
 
 # E2E Testing Patterns
@@ -306,7 +305,7 @@ test('trade execution', async ({ page }) => {
   // Skip on production — real money
   test.skip(process.env.NODE_ENV === 'production', 'Skip on production')
 
-  await page.goto('/markets/test-market')
+  await page.goto('/devices/test-device')
   await page.locator('[data-testid="position-yes"]').click()
   await page.locator('[data-testid="trade-amount"]').fill('1.0')
 

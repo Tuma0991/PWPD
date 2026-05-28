@@ -1,10 +1,10 @@
 # Enterprise Controls
 
-This is a starter governance file for enterprise ECC deployments.
+This is a starter governance file for enterprise Guardian IoT deployments.
 
 ## Baseline
 
-- Repository: https://github.com/affaan-m/everything-claude-code
+- Project: Guardian IoT Wearable Protection Device
 - Recommended profile: full
 - Keep install manifests, audit allowlists, and Codex baselines under review.
 

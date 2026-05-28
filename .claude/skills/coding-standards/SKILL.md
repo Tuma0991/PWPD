@@ -1,7 +1,6 @@
 ---
 name: coding-standards
-description: Universal coding standards, best practices, and patterns for TypeScript, JavaScript, React, and Node.js development.
-origin: ECC
+description: Universal coding standards, best practices, and patterns for Dart, Flutter, TypeScript, JavaScript, and general software development. Adapted for the Guardian IoT platform.
 ---
 
 # Coding Standards & Best Practices
@@ -49,12 +48,12 @@ Universal coding standards applicable across all projects.
 
 ```typescript
 // PASS: GOOD: Descriptive names
-const marketSearchQuery = 'election'
+const deviceSearchQuery = 'Nako'
 const isUserAuthenticated = true
 const totalRevenue = 1000
 
 // FAIL: BAD: Unclear names
-const q = 'election'
+const q = 'Nako'
 const flag = true
 const x = 1000
 ```
@@ -63,12 +62,12 @@ const x = 1000
 
 ```typescript
 // PASS: GOOD: Verb-noun pattern
-async function fetchMarketData(marketId: string) { }
+async function fetchDeviceDataData(marketId: string) { }
 function calculateSimilarity(a: number[], b: number[]) { }
 function isValidEmail(email: string): boolean { }
 
 // FAIL: BAD: Unclear or noun-only
-async function market(id: string) { }
+async function deviceFn(id: string) { }
 function similarity(a, b) { }
 function email(e) { }
 ```
@@ -119,15 +118,15 @@ async function fetchData(url) {
 
 ```typescript
 // PASS: GOOD: Parallel execution when possible
-const [users, markets, stats] = await Promise.all([
+const [users, devices, stats] = await Promise.all([
   fetchUsers(),
-  fetchMarkets(),
+  fetchDeviceDatas(),
   fetchStats()
 ])
 
 // FAIL: BAD: Sequential when unnecessary
 const users = await fetchUsers()
-const markets = await fetchMarkets()
+const devices = await fetchDeviceDatas()
 const stats = await fetchStats()
 ```
 
@@ -135,19 +134,19 @@ const stats = await fetchStats()
 
 ```typescript
 // PASS: GOOD: Proper types
-interface Market {
+interface DeviceData {
   id: string
   name: string
   status: 'active' | 'resolved' | 'closed'
   created_at: Date
 }
 
-function getMarket(id: string): Promise<Market> {
+function getDeviceData(id: string): Promise<DeviceData> {
   // Implementation
 }
 
 // FAIL: BAD: Using 'any'
-function getMarket(id: any): Promise<any> {
+function getDeviceData(id: any): Promise<any> {
   // Implementation
 }
 ```
@@ -240,15 +239,15 @@ setCount(count + 1)  // Can be stale in async scenarios
 ### REST API Conventions
 
 ```
-GET    /api/markets              # List all markets
-GET    /api/markets/:id          # Get specific market
-POST   /api/markets              # Create new market
-PUT    /api/markets/:id          # Update market (full)
-PATCH  /api/markets/:id          # Update market (partial)
-DELETE /api/markets/:id          # Delete market
+GET    /api/devices              # List all devices
+GET    /api/devices/:id          # Get specific device
+POST   /api/devices              # Create new device
+PUT    /api/devices/:id          # Update device (full)
+PATCH  /api/devices/:id          # Update device (partial)
+DELETE /api/devices/:id          # Delete device
 
 # Query parameters for filtering
-GET /api/markets?status=active&limit=10&offset=0
+GET /api/devices?status=active&limit=10&offset=0
 ```
 
 ### Response Format
@@ -269,7 +268,7 @@ interface ApiResponse<T> {
 // Success response
 return NextResponse.json({
   success: true,
-  data: markets,
+  data: devices,
   meta: { total: 100, page: 1, limit: 10 }
 })
 
@@ -286,7 +285,7 @@ return NextResponse.json({
 import { z } from 'zod'
 
 // PASS: GOOD: Schema validation
-const CreateMarketSchema = z.object({
+const CreateDeviceDataSchema = z.object({
   name: z.string().min(1).max(200),
   description: z.string().min(1).max(2000),
   endDate: z.string().datetime(),
@@ -297,7 +296,7 @@ export async function POST(request: Request) {
   const body = await request.json()
 
   try {
-    const validated = CreateMarketSchema.parse(body)
+    const validated = CreateDeviceDataSchema.parse(body)
     // Proceed with validated data
   } catch (error) {
     if (error instanceof z.ZodError) {
@@ -319,7 +318,7 @@ export async function POST(request: Request) {
 src/
 ├── app/                    # Next.js App Router
 │   ├── api/               # API routes
-│   ├── markets/           # Market pages
+│   ├── devices/           # DeviceData pages
 │   └── (auth)/           # Auth pages (route groups)
 ├── components/            # React components
 │   ├── ui/               # Generic UI components
@@ -340,7 +339,7 @@ src/
 components/Button.tsx          # PascalCase for components
 hooks/useAuth.ts              # camelCase with 'use' prefix
 lib/formatDate.ts             # camelCase for utilities
-types/market.types.ts         # camelCase with .types suffix
+types/device.types.ts         # camelCase with .types suffix
 ```
 
 ## Comments & Documentation
@@ -367,23 +366,23 @@ name = user.name
 
 ```typescript
 /**
- * Searches markets using semantic similarity.
+ * Searches devices using semantic similarity.
  *
  * @param query - Natural language search query
  * @param limit - Maximum number of results (default: 10)
- * @returns Array of markets sorted by similarity score
+ * @returns Array of devices sorted by similarity score
  * @throws {Error} If OpenAI API fails or Redis unavailable
  *
  * @example
  * ```typescript
- * const results = await searchMarkets('election', 5)
- * console.log(results[0].name) // "Trump vs Biden"
+ * const results = await fetchDeviceData('Nako', 5)
+ * console.log(results[0].name) // "Guardian Nako"
  * ```
  */
-export async function searchMarkets(
+export async function fetchDeviceData(
   query: string,
   limit: number = 10
-): Promise<Market[]> {
+): Promise<DeviceData[]> {
   // Implementation
 }
 ```
@@ -396,9 +395,9 @@ export async function searchMarkets(
 import { useMemo, useCallback } from 'react'
 
 // PASS: GOOD: Memoize expensive computations
-const sortedMarkets = useMemo(() => {
-  return markets.sort((a, b) => b.volume - a.volume)
-}, [markets])
+const sortedDeviceDatas = useMemo(() => {
+  return devices.sort((a, b) => b.batteryLevel - a.batteryLevel)
+}, [devices])
 
 // PASS: GOOD: Memoize callbacks
 const handleSearch = useCallback((query: string) => {
@@ -428,13 +427,13 @@ export function Dashboard() {
 ```typescript
 // PASS: GOOD: Select only needed columns
 const { data } = await supabase
-  .from('markets')
+  .from('devices')
   .select('id, name, status')
   .limit(10)
 
 // FAIL: BAD: Select everything
 const { data } = await supabase
-  .from('markets')
+  .from('devices')
   .select('*')
 ```
 
@@ -460,7 +459,7 @@ test('calculates similarity correctly', () => {
 
 ```typescript
 // PASS: GOOD: Descriptive test names
-test('returns empty array when no markets match query', () => { })
+test('returns empty array when no devices match query', () => { })
 test('throws error when OpenAI API key is missing', () => { })
 test('falls back to substring search when Redis unavailable', () => { })
 
@@ -476,12 +475,12 @@ Watch for these anti-patterns:
 ### 1. Long Functions
 ```typescript
 // FAIL: BAD: Function > 50 lines
-function processMarketData() {
+function processDeviceDataData() {
   // 100 lines of code
 }
 
 // PASS: GOOD: Split into smaller functions
-function processMarketData() {
+function processDeviceDataData() {
   const validated = validateData()
   const transformed = transformData(validated)
   return saveData(transformed)
@@ -493,8 +492,8 @@ function processMarketData() {
 // FAIL: BAD: 5+ levels of nesting
 if (user) {
   if (user.isAdmin) {
-    if (market) {
-      if (market.isActive) {
+    if (device) {
+      if (device.isActive) {
         if (hasPermission) {
           // Do something
         }
@@ -506,8 +505,8 @@ if (user) {
 // PASS: GOOD: Early returns
 if (!user) return
 if (!user.isAdmin) return
-if (!market) return
-if (!market.isActive) return
+if (!device) return
+if (!device.isActive) return
 if (!hasPermission) return
 
 // Do something

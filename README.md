@@ -20,12 +20,13 @@ guardian_app/
 │   └── screens/
 │       ├── auth_screen.dart         # Login / Register
 │       ├── home_screen.dart         # Dashboard with live status cards
-│       ├── map_screen.dart          # Live GPS map (Google Maps)
+│       ├── map_screen.dart          # Live GPS map (OpenStreetMap)
 │       ├── fall_detection_screen.dart  # Accelerometer + fall status
 │       ├── alerts_screen.dart       # Alert history log
 │       └── contacts_screen.dart     # Emergency contacts manager
 └── esp32_firmware/
-    └── guardian_firmware.ino        # Arduino code for ESP32
+esp32_firmware/
+    └── guardian_firmware/            # Arduino C++ project for ESP32
 ```
 
 ---
@@ -59,17 +60,9 @@ guardian_app/
 
 ---
 
-### Step 2 — Google Maps API Key
+### Step 2 — Map Setup (No API Key Needed)
 
-1. Go to [Google Cloud Console](https://console.cloud.google.com/)
-2. Enable **Maps SDK for Android** (and iOS if needed)
-3. Create an API Key
-4. Add to `android/app/src/main/AndroidManifest.xml`:
-```xml
-<meta-data
-    android:name="com.google.android.geo.API_KEY"
-    android:value="YOUR_API_KEY_HERE"/>
-```
+The app uses **OpenStreetMap** with `flutter_map` — completely free, no API key required. No setup needed; maps work out of the box.
 
 ---
 
@@ -156,7 +149,7 @@ The ESP32 pushes data to Firebase Realtime Database at this path:
 |--------|---------|
 | **Login / Register** | Firebase Email Auth |
 | **Dashboard** | Live device status, emergency banner |
-| **Map** | Real-time GPS tracking via Google Maps |
+| **Map** | Real-time GPS tracking via OpenStreetMap |
 | **Sensors** | Live accelerometer bars, fall status |
 | **Alerts** | History of all emergency events |
 | **Contacts** | Add/edit/delete emergency contacts, tap to call |
@@ -198,7 +191,7 @@ Firestore (alert logged) + Push Notification
 - **Firebase Auth** — User authentication
 - **Firebase Realtime Database** — Live ESP32 sensor data
 - **Cloud Firestore** — Alert history & contacts
-- **Google Maps Flutter** — Live GPS map
+- **flutter_map + OpenStreetMap** — Live GPS map (free, no API key)
 - **ESP32** — Microcontroller
 - **MPU6050** — Accelerometer (fall detection)
 - **NEO-6M GPS** — Location tracking
