@@ -4,7 +4,7 @@
 
 **Guardian** (branded as "GuardianNako") is an IoT Wearable Protection Device system consisting of three major components:
 
-1. **ESP32 Firmware** — wearable hardware with MPU6050 accelerometer, NEO-6M GPS, SOS button, and BLE provisioning
+1. **ESP32 Firmware** — wearable hardware with MPU6050 accelerometer, GT-U8 GPS, SOS button, and BLE provisioning
 2. **Firebase Backend** — real-time sensor data (RTDB) + persistent user data (Firestore) + authentication
 3. **Flutter Mobile App** — live monitoring dashboard, GPS map, fall detection, geofencing, emergency contacts, and BLE device setup
 
@@ -17,7 +17,7 @@
 │    ESP32 Firmware   │ ──────────────────> │   Firebase Backend   │ <────────────────── │    Flutter Mobile App │
 │                     │                     │                      │                     │                      │
 │  • MPU6050 (accel)  │   RTDB writes       │  Realtime Database   │   RTDB streams      │  • Dashboard         │
-│  • NEO-6M GPS       │   (every 2s)        │                      │                     │  • Live GPS Map      │
+│  • GT-U8 GPS       │   (every 2s)        │                      │                     │  • Live GPS Map      │
 │  • SOS Button       │                     │  • /devices/{id}/    │   Firestore CRUD    │  • Fall Detection    │
 │  • BLE Server       │ <─ ─ ─ ─ ─ ─ ─ ─ ─ │    sensors           │                     │  • Alert History     │
 │  • Geofence Check   │   BLE provisioning  │    emergency         │   Auth state        │  • Geofence Manager  │
@@ -43,54 +43,43 @@
 
 **File:** `esp32_firmware/guardian_firmware/guardian_firmware.ino`
 
-The ESP32 is the wearable device worn by the protected person. It reads sensor data and pushes it to Firebase every 2 seconds.
+The ESP32 is the wearable device worn by the protected person. It samples the IMU at 100 Hz for on-device fall detection and uploads to Firebase only on events and a slow heartbeat (2 min active / 5 min resting), duty-cycling the GPS.
 
 ```
-┌──────────────────────────────────────────────────┐
-│                  ESP32 Board                      │
-│                                                   │
-│  ┌──────────┐  ┌──────────┐  ┌───────────────┐   │
-│  │ MPU6050  │  │ NEO-6M  │  │  SOS Button   │   │
-│  │ Accel/Gyro│  │   GPS   │  │  (GPIO 4)     │   │
-│  │ I2C:22,21│  │ UART2   │  │  Active LOW   │   │
-│  └────┬─────┘  └────┬─────┘  └──────┬────────┘   │
-│       │             │               │             │
-│       ▼             ▼               ▼             │
-│  ┌───────────────────────────────────────────┐    │
-│  │              Main Loop                     │    │
-│  │                                            │    │
-│  │  • Read MPU6050 → ax, ay, az (g-force)    │    │
-│  │  • Feed GPS → lat, lng                    │    │
-│  │  • Detect falls (mag > 2.5g threshold)    │    │
-│  │  • Detect SOS button press (debounced)    │    │
-│  │  • Push sensor data every 2s              │    │
-│  │  • Check geofences every 30s              │    │
-│  │  • Poll emergency clear flag              │    │
-│  └──────────────────┬────────────────────────┘    │
-│                     │                              │
-│  ┌──────────────────▼────────────────────────┐    │
-│  │         Connectivity Manager              │    │
-│  │                                            │    │
-│  │  WiFi (shared radio with BLE):            │    │
-│  │  • Connect to provisioned network         │    │
-│  │  • Firebase_ESP_Client (mobizt)           │    │
-│  │                                            │    │
-│  │  BLE Server (unprovisioned mode):         │    │
-│  │  • Device Info characteristic (read)      │    │
-│  │  • WiFi Credentials characteristic (write)│    │
-│  │  • Provisioning Status characteristic     │    │
-│  │    (notify)                                │    │
-│  └───────────────────────────────────────────┘    │
-│                                                   │
-│  Storage: Preferences (NVS)                       │
-│  • WiFi SSID & password                          │
-│  • Device ID (auto-generated from MAC)            │
-└──────────────────────────────────────────────────┘
+ESP32 Board (ESP32-S3 SuperMini)
+│
+├─ MPU6050 (I2C: SDA=8, SCL=9)      — sampled @ 100 Hz
+├─ GT-U8 GPS (UART2: RX=5, TX=6)     — duty-cycled
+├─ SOS button (GPIO 4, active LOW)   — interrupt + polling
+└─ Status LED (GPIO 2)
+
+loop() — core 1 (sensing, never blocked by the network):
+  • Sample MPU6050 @ 100 Hz (g-force)
+  • Feed GPS bytes → TinyGPS++
+  • Fall detect: free-fall → impact → post-impact + 15 s "I'm OK" window
+  • SOS button handling
+  • Evaluate geofences on each accepted GPS fix
+  • Power mode (ACTIVE / RESTING) + status LED
+
+netTask — core 0 (networking):
+  • WiFi reconnect with back-off
+  • Firebase REST client (HTTPClient — no external library)
+  • Alert retry until delivered
+  • Heartbeat / location / geofence events
+
+BLE Server (provisioning mode, 5-min window):
+  • Device Info characteristic (read)
+  • WiFi Credentials characteristic (write)
+  • Provisioning Status characteristic (notify)
+
+Storage: Preferences (NVS)
+  • Up to 3 WiFi networks
+  • Device ID (auto-generated from MAC: "guardian_<mac>")
 ```
 
 **Key algorithms:**
-- **Fall Detection:** Calculates acceleration magnitude `sqrt(x² + y² + z²)`. A fall is triggered when magnitude exceeds 2.5g, respecting a 5s cooldown and 3s SOS-suppression window.
-- **Geofence Checking:** Implements the Haversine formula for distance calculation. Checks all synced geofences every 30s, tracking enter/exit state transitions.
+- **Fall Detection:** Samples the IMU at 100 Hz and detects free-fall (magnitude < 0.4g) followed by an impact (> 2.5g, or > 3.5g on its own), then checks whether the wearer resumes normal movement. A 15 s "I'm OK" window lets the wearer cancel before the alert is sent.
+- **Geofence Checking:** Implements the Haversine formula for distance calculation. Evaluates geofences on each accepted GPS fix, using a 2-fix confirmation to avoid boundary jitter, and uploads enter/exit events as they happen.
 - **BLE Provisioning:** Advertises as "Guardian_XXXX" with a 128-bit custom service UUID. Provides device metadata, accepts WiFi credentials, and notifies connection status before reboot.
 
 ---
@@ -468,11 +457,12 @@ User enters credentials in AuthScreen
 
 | Layer | Technology | Purpose |
 |-------|-----------|---------|
-| **Hardware** | ESP32 | Microcontroller with WiFi + BLE |
-| **Sensors** | MPU6050, NEO-6M GPS | Accelerometer/gyroscope + GPS positioning |
+| **Hardware** | ESP32-S3 | Microcontroller with WiFi + BLE |
+| **Sensors** | MPU6050, GT-U8 GPS | Accelerometer/gyroscope + GPS positioning |
+| **Power** | LiPo + TP4056 + boost + switch | Battery, charging, 5 V regulation, power cut-off |
 | **Firmware** | Arduino C++ | Sensor reading, fall detection, Firebase client |
 | **BLE Provisioning** | ESP32 BLE Server + flutter_blue_plus | WiFi credential transfer |
-| **Real-time Data** | Firebase Realtime Database | Live sensor streams (2s interval) |
+| **Real-time Data** | Firebase Realtime Database | Event-driven uploads + heartbeat (2 min active / 5 min resting) |
 | **Persistent Data** | Cloud Firestore | User data, contacts, geofences, alert history |
 | **Authentication** | Firebase Auth | Email/password authentication |
 | **Mobile App** | Flutter 3.x (Dart) | Cross-platform mobile app |
@@ -514,7 +504,7 @@ User enters credentials in AuthScreen
 
 ### Offline Detection
 
-Device online status is determined by timestamp staleness: if the last sensor update is older than 10 seconds (5 missed 2-second update intervals), the device is considered offline. No separate heartbeat mechanism is used.
+Device online status is determined by timestamp staleness scaled to the device's reported heartbeat interval (`sensors/hbIntervalS`): a device is offline once it has missed 2.5 heartbeats (~5 min active, ~12.5 min resting). The `sensors/online` flag is not relied on because it stays `true` if the device dies.
 
 ### Emergency Deduplication
 

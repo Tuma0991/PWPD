@@ -3,18 +3,35 @@
 import 'package:flutter/material.dart';
 
 class AppTheme {
-  // ─── Colors ──────────────────────────────────────────────────────────────
+  // ─── Brand ───────────────────────────────────────────────────────────────
   static const Color primary = Color(0xFF1565C0);       // Deep Blue
+  static const Color primaryDark = Color(0xFF0D47A1);   // Pressed / gradients
   static const Color primaryLight = Color(0xFF1E88E5);  // Medium Blue
-  static const Color accent = Color(0xFF0288D1);         // Sky Blue
-  static const Color danger = Color(0xFFD32F2F);         // Emergency Red
-  static const Color warning = Color(0xFFF57C00);        // Orange
-  static const Color success = Color(0xFF388E3C);        // Green
-  static const Color background = Color(0xFFF5F7FA);     // Off-white
-  static const Color surface = Color(0xFFFFFFFF);        // White
-  static const Color textPrimary = Color(0xFF0D1B2A);    // Near-black
-  static const Color textSecondary = Color(0xFF5C6B7A);  // Grey
-  static const Color cardShadow = Color(0x1A1565C0);     // Blue shadow
+  static const Color accent = Color(0xFF0288D1);        // Sky Blue
+
+  // ─── Status (one meaning per color) ──────────────────────────────────────
+  static const Color danger = Color(0xFFD32F2F);        // SOS / fall ONLY
+  static const Color success = Color(0xFF2E7D32);       // Normal / online
+  static const Color warning = Color(0xFFF57C00);       // Caution
+  static const Color offline = Color(0xFFE65100);       // Offline / stale data
+  static const Color offlineBg = Color(0xFFFFF3E0);     // Offline card tint
+  static const Color geofence = Color(0xFF7C4DFF);      // Zone alerts
+
+  // ─── Surfaces & text ─────────────────────────────────────────────────────
+  static const Color background = Color(0xFFF0F4FF);    // Matches the screens
+  static const Color surface = Color(0xFFFFFFFF);
+  static const Color textPrimary = Color(0xFF1A2340);
+  static const Color textSecondary = Color(0xFF5C6B7A); // ~5.5:1 on white
+  static const Color textMuted = Color(0xFF6B7A99);     // Hints / last seen (readable)
+  static const Color inactive = Color(0xFF9EA8C2);      // Disabled dots/icons only — NOT for text
+  static const Color cardShadow = Color(0x1A1565C0);
+
+  // ─── Gradients ───────────────────────────────────────────────────────────
+  static const List<Color> offlineGradient = [
+    Color(0xFFE65100),
+    Color(0xFFEF6C00),
+    Color(0xFFF57C00), // deep enough for white text
+  ];
 
   static ThemeData get theme => ThemeData(
         useMaterial3: true,
@@ -23,21 +40,22 @@ class AppTheme {
           primary: primary,
           secondary: accent,
           surface: surface,
-          background: background,
           error: danger,
         ),
         scaffoldBackgroundColor: background,
         fontFamily: 'Nunito',
+        // Matches what every screen already does: blue bar, white title, left-aligned.
         appBarTheme: const AppBarTheme(
-          backgroundColor: surface,
-          foregroundColor: textPrimary,
+          backgroundColor: primary,
+          foregroundColor: Colors.white,
           elevation: 0,
-          centerTitle: true,
+          centerTitle: false,
+          iconTheme: IconThemeData(color: Colors.white),
           titleTextStyle: TextStyle(
             fontFamily: 'Nunito',
-            fontWeight: FontWeight.w700,
+            fontWeight: FontWeight.w800,
             fontSize: 18,
-            color: textPrimary,
+            color: Colors.white,
           ),
         ),
         cardTheme: CardThemeData(
@@ -65,7 +83,7 @@ class AppTheme {
         ),
         inputDecorationTheme: InputDecorationTheme(
           filled: true,
-          fillColor: const Color(0xFFF0F4FF),
+          fillColor: background,
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(12),
             borderSide: BorderSide.none,

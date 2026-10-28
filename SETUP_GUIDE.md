@@ -1,63 +1,84 @@
 # Guardian ESP32 Wearable App - Complete Setup Guide
 
-## 🔧 What Was Configured
+## 🔧 What's Configured
 
-✅ **Maps Setup** — Using free OpenStreetMap (no API key required)  
-✅ **Added required permissions** — Location, Internet, Network access  
+✅ **Maps** — free OpenStreetMap (no API key), plus live Guardian tracking and a road-following route to the wearer.  
+✅ **Push notifications** — FCM + Cloud Functions (SOS, fall, geofence breach) with SMS fallback.  
+✅ **Device settings** — wearer photo + name, and BLE WiFi provisioning.  
+✅ **Required permissions** — Location, Internet, Network, Bluetooth, Camera, Notifications.
 
 ---
 
 ## 📋 Complete Setup Checklist
 
-### **STEP 1: Maps Configuration (No Setup Required!)**
+### STEP 1: Maps Configuration (No Setup Required!)
 
-The app uses **OpenStreetMap** with flutter_map, which is completely free and requires no API key.
+The app uses **OpenStreetMap** with `flutter_map` — free, no API key. The map also draws:
+- The **wearer** (device) marker with their photo (set in Device Settings).
+- The **Guardian's** live location (blue "You" marker).
+- A **road-following route** from Guardian → wearer (OSRM, `driving`/`foot` toggle).
 
-✅ Maps are configured and ready to use  
-✅ No sign-ups, payments, or API keys needed  
-✅ Location tracking works automatically with GPS data from ESP32
+✅ No sign-ups, payments, or API keys needed.
 
-### **STEP 2: Configure ESP32 Firmware**
+### STEP 2: Configure ESP32 Firmware
 
-The ESP32 needs WiFi and Firebase credentials to send data to your app.
+The ESP32 needs WiFi and Firebase credentials to send data to the app.
 
-#### A. Update WiFi & Firebase Config
+#### A. Configure WiFi & Firebase (`secrets.h`)
 
-Edit `esp32_firmware/guardian_firmware.ino` and update these lines (around line 29-33):
+Private settings live in `secrets.h` (next to the `.ino`); tunables live in section 1 of `guardian_firmware.ino`.
 
-```cpp
-#define WIFI_SSID           "YOUR_WIFI_SSID"              // ← Change this
-#define WIFI_PASSWORD       "YOUR_WIFI_PASSWORD"          // ← Change this
-#define FIREBASE_HOST       "YOUR_PROJECT_ID.firebaseio.com"  // ← Change this
-#define FIREBASE_AUTH       "YOUR_LONG_SECRET_TOKEN"      // ← Change this (get from Firebase)
-#define DEVICE_ID           "esp32_device_1"              // Keep this or change to match app config
-```
+1. Copy the template, then fill in your values:
 
-#### B. Get Firebase Real-Time Database Secret Token
+   ```bash
+   cp ESP32_CONFIG_TEMPLATE.h secrets.h
+   ```
 
-1. Go to **Firebase Console** → Your Project → **Database** (Realtime Database)
-2. Click the **Settings** icon (gear icon) → **Database secrets**
-3. Copy the token and paste it in `FIREBASE_AUTH`
+2. Edit `secrets.h`:
+
+   ```cpp
+   #define FIREBASE_HOST  "https://YOUR_PROJECT-default-rtdb.firebaseio.com"
+
+   // Choose ONE auth option:
+   //   OPTION A — legacy database secret (simplest, bypasses security rules)
+   #define FIREBASE_AUTH  "PASTE_NEW_DATABASE_SECRET_HERE"
+   //   OPTION B — per-device email/password sign-in (recommended)
+   // #define FIREBASE_API_KEY        "YOUR_WEB_API_KEY"
+   // #define FIREBASE_AUTH_EMAIL     "guardian@yourdomain.com"
+   // #define FIREBASE_AUTH_PASSWORD  "device-password"
+
+   #define PROVISIONING_PIN  ""   // optional BLE PIN (empty = none)
+   ```
+
+3. WiFi credentials are provisioned over BLE from the app (or auto-migrated from v1 NVS keys). There is **no** hardcoded `WIFI_SSID`, `WIFI_PASSWORD`, or `DEVICE_ID` — the device ID is auto-generated as `guardian_<mac>` at boot and stored in NVS.
+
+4. Never commit `secrets.h` — it is already in `.gitignore`.
+
+#### B. Get Firebase Realtime Database Secret Token
+
+1. Firebase Console → Project → **Realtime Database** → ⚙️ **Database secrets**.
+2. Copy the token and paste it into `FIREBASE_AUTH`.
 
 #### C. Upload to ESP32
 
-1. Use Arduino IDE or PlatformIO
-2. Install required libraries (already in code comments):
-   - `Firebase ESP32 Client by mobizt`
-   - `TinyGPS++ by Mikal Hart`
-   - `MPU6050 by Electronic Cats`
-   - `ArduinoJson by Benoit Blanchon`
+1. Use Arduino IDE or PlatformIO.
+2. Install libraries:
+   - `TinyGPS++` by Mikal Hart
+   - `MPU6050` by Electronic Cats
+   - `ArduinoJson` by Benoit Blanchon (6.x recommended)
 
-3. Select board: `ESP32 Dev Module` (or your variant)
-4. Set baud rate: `115200`
-5. Upload the sketch
+   (WiFi, HTTPClient, Preferences, and BLE ship with the ESP32 core — the old "Firebase ESP32 Client" is not used.)
 
-### **STEP 3: Set Up Firebase Realtime Database (RTDB) Rules**
+3. Board: `ESP32S3 Dev Module` (esp32 core 3.x).
+4. `USB CDC On Boot` → **Enabled**.
+5. Baud: `115200`. Upload the sketch.
 
-The app reads sensor data from Firebase RTDB. You need to set proper rules.
+### STEP 3: Set Up Firebase Realtime Database (RTDB) Rules
 
-1. Go to **Firebase Console** → **Realtime Database** → **Rules**
-2. Replace the default rules with:
+The app reads sensor data **and** writes its FCM push token + device ownership, so the rules must allow those nodes.
+
+1. Firebase Console → **Realtime Database** → **Rules**.
+2. Replace with:
 
 ```json
 {
@@ -65,16 +86,13 @@ The app reads sensor data from Firebase RTDB. You need to set proper rules.
     "devices": {
       "$deviceId": {
         ".read": true,
-        ".write": "$deviceId === auth.uid || root.child('admins').child(auth.uid).exists()",
-        "sensors": {
-          ".read": true,
-          ".write": true
-        },
-        "emergency": {
-          ".read": true,
-          ".write": true,
-          "active": {},
-          "clearedAt": {}
+        "sensors": { ".write": true },
+        "emergency": { ".write": true },
+        "geofences": { ".write": "auth != null" },
+        "geofence_violations": { ".write": true },
+        "owner": { ".write": "auth != null" },
+        "fcmTokens": {
+          "$userId": { ".write": "auth != null && auth.uid === $userId" }
         }
       }
     }
@@ -82,41 +100,31 @@ The app reads sensor data from Firebase RTDB. You need to set proper rules.
 }
 ```
 
-3. Click **Publish**
+3. Click **Publish**.
 
-### **STEP 4: Create Initial Test Data (Optional but Recommended)**
+> `sensors` / `emergency` stay open so the ESP32 can write (it authenticates as a service account or via database secret). `fcmTokens` / `owner` are written by the signed-in phone, which is why they require `auth != null`. Keep rules open for capstone testing; tighten before production.
 
-To test the app without waiting for ESP32 to send data:
+### STEP 4: Create Initial Test Data (Optional)
 
-1. In Firebase Console → **Realtime Database**
-2. Click the `+` button to add data
-3. Key: `devices` → Click `+` → Add key: `esp32_device_1` → Click `+` → Add key: `sensors`
-4. Add these fields:
+1. Firebase Console → **Realtime Database** → `+` → add `devices` → `guardian_<mac>` → `sensors`:
+
 ```json
 {
-  "gps": {
-    "lat": 10.3157,
-    "lng": 123.8854
-  },
-  "accelerometer": {
-    "x": 0.5,
-    "y": 1.2,
-    "z": 9.8
-  },
+  "gps": { "lat": 10.3157, "lng": 123.8854 },
+  "accelerometer": { "x": 0.5, "y": 1.2, "z": 9.8 },
   "fallDetected": false,
-  "timestamp": 1234567890,
-  "online": false
+  "timestamp": {".sv": "timestamp"},
+  "hbIntervalS": 120
 }
 ```
 
-5. Also add `emergency` node:
+2. Add an `emergency` node:
+
 ```json
-{
-  "active": false
-}
+{ "active": false }
 ```
 
-### **STEP 5: Test the App**
+### STEP 5: Test the App
 
 ```bash
 cd d:\PWPD\pwpd
@@ -125,11 +133,64 @@ flutter run
 ```
 
 **Test each screen:**
-- ✅ Dashboard → Should show device data from Firebase
-- ✅ Map → Should show device location (uses free OpenStreetMap tiles)
-- ✅ Sensors → Should show accelerometer data
-- ✅ Alerts → Should show alert history
-- ✅ Contacts → Should allow adding emergency contacts
+- ✅ Dashboard → device data + emergency banner + 3-dots menu (Settings / About Us / Log out)
+- ✅ Map → wearer marker + Guardian "You" marker + driving/walking route toggle
+- ✅ Movement → status hero (Still / Light / Moving / Vigorous / SOS / Fall / Offline)
+- ✅ Alerts → alert history
+- ✅ Geofences → add/edit zones, violations
+- ✅ Contacts → add/edit/delete emergency contacts, tap to call
+- ✅ Settings → Device Settings (photo + name + WiFi) and Language
+
+### STEP 6: Enable Push Notifications (Works When App Is Closed)
+
+FCM **receiving** is free. **Sending** uses Cloud Functions, which needs the **Blaze plan** (card on file, but the free tier easily covers a capstone: 2M invocations/month).
+
+#### 6.1 Upgrade Firebase to Blaze
+
+1. Firebase Console → ⚙️ Project settings → **Upgrade** (bottom-left "Spark" badge).
+2. Add a card. You stay at $0 under the free tier.
+
+#### 6.2 Deploy the Cloud Functions
+
+The `functions/` folder already contains the triggers (`onEmergency`, `onGeofenceViolation`). Deploy them:
+
+```powershell
+npm install -g firebase-tools
+firebase login
+firebase use pwpd-5e580
+firebase deploy --only functions
+```
+
+#### 6.3 (Optional) SMS fallback secrets
+
+Push works without this. For email-to-SMS alerts to emergency contacts:
+
+```powershell
+firebase functions:secrets:set EMAIL_USER
+firebase functions:secrets:set EMAIL_PASS
+```
+
+#### 6.4 Android notification permission
+
+On Android 13+, the OS asks "Allow notifications?" on first launch. If denied, re-enable under Settings → Apps → your app → Notifications. Android-only is **fully free**.
+
+#### 6.5 iOS (optional, not free)
+
+iOS push requires the **Apple Developer Program ($99/yr)**. Upload the APNs `.p8` key under Firebase Console → Project settings → Cloud Messaging. Skip for an Android-only demo.
+
+#### 6.6 Test with the app closed
+
+1. Pair a device in the app (registers the phone's FCM token at `devices/{id}/fcmTokens/{uid}`).
+2. Force-close the app (swipe it away from recents).
+3. Trigger an alert — write to RTDB:
+
+```
+/devices/{deviceId}/emergency = { "active": true, "reason": "SOS button pressed", "lat": ..., "lng": ... }
+```
+
+4. A system notification with sound should appear within ~1–3 s even though the app is dead.
+
+**Why it works when closed:** the Cloud Function sends a *notification* message (has a `notification` block), so the OS displays it without the app running. A `FirebaseMessaging.onBackgroundMessage` handler is **not** needed for notification messages — only for data-only messages.
 
 ---
 
@@ -138,62 +199,74 @@ flutter run
 ```
 ┌─────────────────────────────────────────────┐
 │         ESP32 Device                        │
-│  (WiFi: Your_SSID)                         │
-│  (Reads: MPU6050, GPS)                     │
+│  (WiFi + MPU6050 + GT-U8 GPS)              │
 └────────────────┬────────────────────────────┘
                  │ (Sends sensor data)
                  │ WiFi/Internet
                  ▼
     ┌────────────────────────────┐
     │  Firebase Realtime DB      │
-    │  /devices/esp32_device_1   │
+    │  /devices/guardian_<mac>   │
     │  ├── sensors (GPS, accel)  │
     │  ├── emergency (alert)     │
     │  └── ...                   │
-    └────────────┬───────────────┘
-                 │ (Listens for changes)
-                 │ WiFi/Internet
-                 ▼
-        ┌──────────────────┐
-        │  Flutter Mobile  │
-        │      App         │
-        │   (this phone)   │
-        └──────────────────┘
+    └──────┬──────────────┬──────┘
+           │              │ (Cloud Function watches)
+           │              ▼
+           │   ┌──────────────────────┐
+           │   │  Cloud Functions     │
+           │   │  → FCM push + SMS    │
+           │   └──────────┬───────────┘
+           │              │
+           │ (Stream)     │ (FCM push)
+           ▼              ▼
+    ┌──────────────────────────┐
+    │  Flutter App (phone)     │
+    │  + system notification   │
+    └──────────────────────────┘
 ```
 
-**Key Points:**
-- **Device ID must match**: App looks for `esp32_device_1` in Firebase
-- **Firebase is the hub**: All communication goes through RTDB
-- **No direct device connection**: ESP32 and phone don't communicate directly
-- **Real-time updates**: StreamBuilder listens to RTDB for live updates
+**Key points:**
+- **Device ID is auto-generated** (`guardian_<mac>`) and provisioned over BLE — the app learns it automatically.
+- **Firebase is the hub** — all communication goes through RTDB.
+- **No direct device↔phone connection** except one-time BLE provisioning.
+- **Notifications** are triggered server-side by Cloud Functions, so they arrive even when the app is closed.
 
 ---
 
 ## 🆘 Troubleshooting
 
-### **"Map screen is blank or not loading"**
-→ Check internet connection. OpenStreetMap tiles require network access. No API key needed.
+### "Map screen is blank or not loading"
+→ Check internet. OpenStreetMap tiles require network. No API key needed.
 
-### **"Device is offline / no data showing"**
-→ Check these:
-1. ESP32 WiFi credentials correct (`WIFI_SSID` / `WIFI_PASSWORD`)
-2. Firebase credentials correct (`FIREBASE_HOST` / `FIREBASE_AUTH`)
-3. ESP32 has internet connection
-4. Firebase RTDB security rules allow reads/writes
-5. Device ID in ESP32 (`DEVICE_ID`) matches app (`esp32_device_1`)
+### "Route line doesn't appear"
+→ Tap **View on Map** during an alert. Requires Guardian location permission and internet (OSRM routing server). Falls back to recentering if OSRM is unreachable.
 
-### **"Can't log in to app"**
-→ Check:
-1. Firebase Authentication is enabled (Email/Password method)
-2. User account exists in Firebase Console → Authentication
-3. Internet connection on phone
-4. Firebase iOS/Android configuration files are present
+### "Device is offline / no data showing"
+1. WiFi credentials provisioned (watch the `[STATUS]` serial line).
+2. `FIREBASE_HOST` / `FIREBASE_AUTH` correct.
+3. ESP32 has internet.
+4. RTDB rules allow reads/writes.
+5. `timestamp` is fresh — offline only after `2.5 × hbIntervalS` (≈5 min active / 12.5 min resting).
 
-### **"GPS shows 0.0, 0.0"**
-→ ESP32 hasn't gotten GPS fix yet:
-1. GPS module needs clear sky view (3-10 minutes outdoor)
-2. Check GPS module connections (RX on pin 16, TX on pin 17)
-3. Monitor serial output for "GPS data" messages
+### "Notifications don't arrive when app is closed"
+1. Cloud Functions **deployed** (`firebase deploy --only functions`).
+2. Project on **Blaze** plan (Spark doesn't run functions).
+3. A device is **paired** in the app (token registered at `devices/{id}/fcmTokens`).
+4. Android 13+: notification permission granted.
+5. iOS: APNs `.p8` key uploaded.
+6. Check function logs: `firebase functions:log`.
+
+### "Can't log in to app"
+1. Firebase Authentication → Email/Password enabled.
+2. User exists in Firebase Console → Authentication.
+3. Phone has internet.
+4. `google-services.json` / `GoogleService-Info.plist` present.
+
+### "GPS shows 0.0, 0.0"
+1. GPS needs clear sky (5–10 min outdoor for first lock).
+2. Check GT-U8 wiring: TX → `PIN_GPS_RX` (GPIO 5), RX → `PIN_GPS_TX` (GPIO 6).
+3. Watch serial output for GPS fix lines.
 
 ---
 
@@ -201,50 +274,51 @@ flutter run
 
 ```
 lib/
-├── main.dart                 # Entry point, auth routing
-├── theme.dart               # Blue & white colors
+├── main.dart                       # Entry point, FCM setup, auth routing
+├── theme.dart                      # Blue & white theme (#1565C0)
 ├── services/
-│   └── firebase_service.dart # RTDB streaming & auth
+│   ├── firebase_service.dart       # Auth, RTDB streams, Firestore CRUD, FCM token
+│   ├── device_config_service.dart  # Paired-device persistence
+│   ├── ble_service.dart            # BLE WiFi provisioning
+│   ├── language_service.dart       # English / Filipino toggle
+│   └── routing_service.dart        # OSRM road-following route
 ├── models/
-│   ├── device_data.dart      # GPS, accelerometer data
-│   └── contact_model.dart    # Emergency contacts
+│   ├── device_data.dart            # GPS + accelerometer + heartbeat
+│   ├── contact_model.dart          # Emergency contacts (+ carrier gateways)
+│   ├── geofence_model.dart         # Geofence zones
+│   └── device_settings_model.dart  # Wearer photo + name
+├── widgets/
+│   └── toast_notification.dart     # Toast + offline banner mixin
 └── screens/
-    ├── home_screen.dart      # Dashboard with device status
-    ├── map_screen.dart       # Live GPS map
-    ├── fall_detection_screen.dart # Accelerometer graph
-    ├── alerts_screen.dart    # Emergency alert history
-    └── contacts_screen.dart  # Emergency contact manager
+    ├── auth_screen.dart            # Login / Register
+    ├── home_screen.dart            # Dashboard + bottom-nav tabs + settings menu
+    ├── map_screen.dart             # Live GPS map, Guardian tracking, route
+    ├── fall_detection_screen.dart  # Movement / fall status
+    ├── alerts_screen.dart          # Alert history
+    ├── contacts_screen.dart        # Emergency contacts
+    ├── device_setup_screen.dart    # BLE WiFi setup
+    └── device_settings_screen.dart # Wearer photo, name, WiFi
 ```
+
+Cloud Functions live in `functions/index.js` (`onEmergency`, `onGeofenceViolation`).
 
 ---
 
-## 🚀 Next Steps After Basic Setup
+## 🚀 Already Implemented (no setup needed)
 
-1. **Customize device ID**: Change `esp32_device_1` to match your ESP32 if needed
-   - Update in: `lib/screens/home_screen.dart` (line 32)
-   - Update in: ESP32 firmware `#define DEVICE_ID`
-   - Update in: Firebase RTDB structure
-
-2. **Add device pairing screen**: Let users pair multiple ESP32 devices
-   - Add a `Settings` screen
-   - Allow users to enter device ID and save to SharedPreferences
-
-3. **Test fall detection**: 
-   - Adjust `#define FALL_ACCEL_THRESHOLD` in ESP32 code
-   - Default is 2.5g of acceleration
-
-4. **Emergency contact notifications**:
-   - Current app logs alerts to Firestore
-   - Add SMS/push notifications (requires Firebase Cloud Messaging)
+- **Device pairing** — automatic via BLE provisioning; no manual device ID.
+- **Settings menu** — 3-dots → Settings / About Us / Log out → Device Settings + Language.
+- **Guardian live location + routing** — `geolocator` stream + OSRM route.
+- **Wearer photo** — stored as base64 in Firestore, shown on map + dashboard.
 
 ---
 
 ## 📝 Important Notes for Capstone
 
-- **Keep Firebase rules OPEN for testing** (change to restrictive rules for production)
-- **WiFi/API keys should NOT be committed to GitHub** (use env variables or .gitignore in production)
-- **ESP32 WiFi password also should NOT be in public code** (use provisioning in production)
-- Document all API keys and secrets in a `.env` file (add to `.gitignore`)
+- **Keep Firebase rules OPEN for testing** (tighten for production).
+- **Never commit secrets** — `secrets.h`, `.env`, `google-services.json` keys stay gitignored.
+- **Cloud Functions need Blaze** (free tier is enough for a demo).
+- Document all API keys in a `.env` file (add to `.gitignore`).
 
 ---
 

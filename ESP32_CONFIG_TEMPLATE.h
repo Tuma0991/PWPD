@@ -1,68 +1,58 @@
-// ═══════════════════════════════════════════════════════════════════
-// ESP32 FIRMWARE CONFIGURATION TEMPLATE
-// Replace values below with YOUR actual credentials
-// ═══════════════════════════════════════════════════════════════════
-
-// 1️⃣ WIFI NETWORK - Your home/office WiFi
-#define WIFI_SSID           "YourWiFiNetworkName"
-#define WIFI_PASSWORD       "YourWiFiPassword123"
-
-// 2️⃣ FIREBASE PROJECT - From your Firebase Console
-#define FIREBASE_HOST       "guardian-abc123.firebaseio.com"  // Get from: Realtime Database → Address bar
-#define FIREBASE_AUTH       "abcd1234efgh5678ijkl9012mnop3456"  // Get from: Database → Settings → Secrets → Database Secret
-
-// 3️⃣ DEVICE IDENTIFICATION
-#define DEVICE_ID           "esp32_device_1"  // Must match value in app (lib/screens/home_screen.dart line 32)
-
-// ═══════════════════════════════════════════════════════════════════
-
-// WHERE TO FIND YOUR FIREBASE CREDENTIALS:
+// ═══════════════════════════════════════════════════════════════
+// GUARDIAN ESP32 FIRMWARE — CONFIGURATION TEMPLATE (v2.0.0)
 //
-// === FIREBASE HOST ===
-// 1. Go to Firebase Console → Your Project
-// 2. Click "Realtime Database"
-// 3. The URL at the top is like: https://guardian-abc123.firebaseio.com
-// 4. Use "guardian-abc123.firebaseio.com" (without https://)
+// In v2, private settings live in `secrets.h` (next to the .ino),
+// and every tunable value lives in section 1 of guardian_firmware.ino.
+// This file documents where to put things.
 //
-// === DATABASE SECRET ===
-// 1. In Realtime Database → Click Settings icon (⚙️) → "Database secrets" tab
-// 2. Copy the token that appears
-// 3. Paste it as FIREBASE_AUTH
-//
-// === DEVICE ID ===
-// 1. This must match hardcoded device ID in Flutter app
-// 2. Currently set to "esp32_device_1" in app
-// 3. If you change it, update it in BOTH places:
-//    - ESP32: #define DEVICE_ID
-//    - Flutter app: lib/screens/home_screen.dart (line 32)
-//
-// ═══════════════════════════════════════════════════════════════════
+//   cp ESP32_CONFIG_TEMPLATE.h secrets.h   # then fill in your values
+//   gitignore secrets.h                    # NEVER commit it
+// ═══════════════════════════════════════════════════════════════
 
-// OPTIONAL: Fall Detection Threshold Tuning
-#define FALL_ACCEL_THRESHOLD   2.5   // Higher = less sensitive (fewer false alarms)
-                                      // Lower = more sensitive (more false alarms)
-                                      // Default 2.5g works for most falls
+// 1️⃣ FIREBASE — copy these into secrets.h
+#define FIREBASE_HOST  "https://YOUR_PROJECT-default-rtdb.firebaseio.com"
 
-#define FALL_COOLDOWN_MS       5000  // Wait 5s before detecting another fall
-#define UPDATE_INTERVAL_MS     2000  // Send data to Firebase every 2 seconds
+// Choose ONE auth option:
+//   OPTION A — legacy database secret (simplest, bypasses security rules)
+#define FIREBASE_AUTH  "PASTE_NEW_DATABASE_SECRET_HERE"
+//   OPTION B — per-device email/password sign-in (recommended)
+// #define FIREBASE_API_KEY        "YOUR_WEB_API_KEY"
+// #define FIREBASE_AUTH_EMAIL     "guardian@yourdomain.com"
+// #define FIREBASE_AUTH_PASSWORD  "device-password"
 
-// ═══════════════════════════════════════════════════════════════════
-// PIN CONFIGURATION
-//
-// MPU6050 (Accelerometer):   I2C (SCL=22, SDA=21 - default)
-// GPS Module:                Serial2 (RX=16, TX=17)
-// SOS Button:                GPIO 0 (Boot button) or any GPIO
-// LED:                       GPIO 2 (Built-in LED)
-//
-// ═══════════════════════════════════════════════════════════════════
+// Optional BLE provisioning PIN (empty = no PIN)
+#define PROVISIONING_PIN  ""
 
-// TROUBLESHOOTING CHECKLIST:
+// 2️⃣ TUNING — all constants live in section 1 of guardian_firmware.ino
+//   Fall detection:  FREEFALL_G, IMPACT_G (2.5g), IMPACT_STRONG_G (3.5g),
+//                    FALL_CANCEL_WINDOW_MS (15 s "I'm OK" window)
+//   Heartbeat:       HEARTBEAT_ACTIVE_MS (2 min), HEARTBEAT_RESTING_MS (5 min)
+//   GPS duty cycle:  GPS_DUTY_CYCLE, GPS_ACTIVE_INTERVAL_MS, GPS_RESTING_INTERVAL_MS
+//   Power modes:     MOTION_DEVIATION_G, REST_AFTER_MS
+
+// 3️⃣ DEVICE ID — auto-generated as "guardian_<mac>" at boot, stored in NVS,
+//   and provisioned to the app over BLE. There is no hardcoded DEVICE_ID.
+//   The app stores it in Firestore (users/{uid}/deviceId) during BLE setup.
+
+// 4️⃣ LIBRARIES (Arduino Library Manager)
+//   - TinyGPSPlus       by Mikal Hart
+//   - MPU6050           by Electronic Cats
+//   - ArduinoJson       by Benoit Blanchon (6.x recommended)
+//   (WiFi, HTTPClient, Preferences, BLE come with the ESP32 core)
+//   The old "Firebase ESP32 Client" (mobizt) is NOT used any more.
+
+// ═══════════════════════════════════════════════════════════════
+// PIN CONFIGURATION (ESP32-S3 SuperMini) — unchanged from v1
 //
-// ❌ "Not connecting to Firebase" → Check FIREBASE_HOST and FIREBASE_AUTH
-// ❌ "Not connecting to WiFi" → Check WIFI_SSID and WIFI_PASSWORD spelling
-// ❌ "Device shows offline in app" → Check if /esp32_device_1/sensors path exists in Firebase
-// ❌ "GPS data is 0.0, 0.0" → Wait 5-10 mins outdoors for GPS lock
-// ❌ "Fall detection too sensitive" → Increase FALL_ACCEL_THRESHOLD to 3.0 or higher
-// ❌ "Can't upload to board" → Check USB cable, baud rate (115200), and board selection (ESP32 Dev Module)
+// MPU6050 (Accelerometer):   I2C (SDA=8, SCL=9)
+// GPS Module (GT-U8):        Serial2 (RX=5, TX=6)
+// SOS Button:                GPIO 4 (active LOW, internal pull-up)
+// Status LED:                GPIO 2 (external single-color LED, active HIGH via 220 Ω)
 //
-// ═══════════════════════════════════════════════════════════════════
+// TROUBLESHOOTING:
+// ❌ "No WiFi saved -> provisioning" → provision WiFi from the app over BLE
+// ❌ "Device shows offline in app"   → check /devices/guardian_<mac>/sensors/timestamp freshness
+// ❌ "GPS data is 0.0, 0.0"          → wait 5-10 mins outdoors for first GPS lock
+// ❌ "Fall detection too sensitive"  → raise IMPACT_G / IMPACT_STRONG_G in section 1
+// ❌ "Can't upload"                  → check board selection (ESP32S3 Dev Module) + USB CDC On Boot
+// ═══════════════════════════════════════════════════════════════

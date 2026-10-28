@@ -2,10 +2,12 @@
 
 import 'package:firebase_database/firebase_database.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/device_data.dart';
 import '../models/contact_model.dart';
 import '../models/geofence_model.dart';
+import '../models/device_settings_model.dart';
 
 class FirebaseService {
   static final FirebaseService _instance = FirebaseService._internal();
@@ -99,6 +101,13 @@ class FirebaseService {
     });
   }
 
+  /// Ask the device to turn GPS on and report its position now. The firmware
+  /// polls /devices/{deviceId}/commands every ~30 s (active) / 60 s (resting),
+  /// so the update arrives shortly after, not instantly.
+  Future<void> requestDeviceLocation(String deviceId) async {
+    await _rtdb.ref('devices/$deviceId/commands/locateNow').set(true);
+  }
+
   // ─── ALERT HISTORY (Firestore) ───────────────────────────────────────────
 
   Stream<List<Map<String, dynamic>>> getAlertHistory(String userId) {
@@ -107,7 +116,7 @@ class FirebaseService {
         .doc(userId)
         .collection('alerts')
         .orderBy('timestamp', descending: true)
-        .limit(20)
+        .limit(100)
         .snapshots()
         .map((snap) => snap.docs.map((d) => d.data()).toList());
   }
@@ -210,7 +219,7 @@ class FirebaseService {
         .delete();
   }
 
-  /// Get geofence violations for a user
+  /// Get geofence violations for a user (Firestore — historical)
   Stream<List<Map<String, dynamic>>> getGeofenceViolations(String userId) {
     return _firestore
         .collection('users')
@@ -222,7 +231,42 @@ class FirebaseService {
         .map((snap) => snap.docs.map((d) => d.data()).toList());
   }
 
-  /// Log a geofence violation
+  /// Listen to real-time geofence violations from the ESP32 via RTDB.
+  /// The ESP32 writes violations to /devices/{deviceId}/geofence_violations/{ts}.
+  Stream<Map<String, dynamic>> listenToGeofenceViolationsRTDB(String deviceId) {
+    final ref = _rtdb.ref('devices/$deviceId/geofence_violations');
+    return ref.onChildAdded.map((event) {
+      final data = Map<String, dynamic>.from(
+          event.snapshot.value as Map? ?? {});
+      data['_rtdbKey'] = event.snapshot.key;
+      return data;
+    });
+  }
+
+  /// Log a geofence violation received from ESP32 into Firestore so it
+  /// appears in the AlertsScreen history and can be queried later.
+  Future<void> logGeofenceViolationToAlerts(
+      String userId, Map<String, dynamic> violationData) async {
+    final type = violationData['type'] ?? 'exited';
+    final name = violationData['name'] ?? 'Unknown zone';
+    final lat = violationData['lat'];
+    final lng = violationData['lng'];
+
+    await _firestore
+        .collection('users')
+        .doc(userId)
+        .collection('alerts')
+        .add({
+      'type': 'geofence_$type',
+      'message': 'Device $type geofence "$name"',
+      'deviceId': violationData['deviceId'] ?? '',
+      'latitude': lat,
+      'longitude': lng,
+      'timestamp': FieldValue.serverTimestamp(),
+    });
+  }
+
+  /// Log a geofence violation (Firestore)
   Future<void> logGeofenceViolation(
       String userId, Map<String, dynamic> violationData) async {
     await _firestore
@@ -252,5 +296,86 @@ class FirebaseService {
     await _rtdb
         .ref('devices/$deviceId/geofences')
         .set(geofenceList);
+  }
+
+  // ─── DEVICE SETTINGS (wearer profile) ───────────────────────────────────
+
+  /// Live wearer profile (name + photo) for a device. Empty when not set.
+  Stream<DeviceSettingsModel> listenToDeviceSettings(String deviceId) {
+    final user = currentUser;
+    if (user == null) return Stream.value(const DeviceSettingsModel());
+    return _firestore
+        .collection('users')
+        .doc(user.uid)
+        .collection('devices')
+        .doc(deviceId)
+        .snapshots()
+        .map((snap) => snap.exists
+            ? DeviceSettingsModel.fromMap(snap.data() ?? {})
+            : const DeviceSettingsModel());
+  }
+
+  Future<void> updateDeviceSettings(
+    String deviceId, {
+    String? name,
+    String? photoBase64,
+  }) async {
+    final user = currentUser;
+    if (user == null || deviceId.isEmpty) return;
+    final updates = <String, dynamic>{};
+    if (name != null) updates['name'] = name;
+    if (photoBase64 != null) updates['photoBase64'] = photoBase64;
+    if (updates.isEmpty) return;
+    await _firestore
+        .collection('users')
+        .doc(user.uid)
+        .collection('devices')
+        .doc(deviceId)
+        .set(updates, SetOptions(merge: true));
+  }
+
+  // ─── FCM PUSH NOTIFICATIONS ──────────────────────────────────────────────
+
+  /// Register this device (phone) to receive push notifications for the
+  /// given ESP32 device. Stored in RTDB so the Cloud Function can look up
+  /// tokens when a geofence violation occurs.
+  Future<void> registerFcmToken(String deviceId) async {
+    final userId = currentUser?.uid;
+    if (userId == null || deviceId.isEmpty) return;
+
+    final token = await FirebaseMessaging.instance.getToken();
+    if (token == null) return;
+
+    await _rtdb
+        .ref('devices/$deviceId/fcmTokens/$userId')
+        .set({
+      'token': token,
+      'platform': 'android',
+      'registeredAt': ServerValue.timestamp,
+    });
+  }
+
+  /// Mark this user as the owner of a device. The Cloud Function reads this
+  /// to find the owner's emergency contacts when an alert fires.
+  /// Also clears old FCM tokens so previous owners stop receiving push
+  /// notifications.
+  Future<void> setDeviceOwner(String deviceId) async {
+    final userId = currentUser?.uid;
+    if (userId == null || deviceId.isEmpty) return;
+
+    // Clear all previous FCM tokens so old owners aren't notified
+    await _rtdb.ref('devices/$deviceId/fcmTokens').remove();
+    // Set new owner
+    await _rtdb.ref('devices/$deviceId/owner').set(userId);
+    // Then register the new owner's FCM token
+    await registerFcmToken(deviceId);
+  }
+
+  /// Remove the FCM token for this user from a device (on logout / device
+  /// unpair).
+  Future<void> removeFcmToken(String deviceId) async {
+    final userId = currentUser?.uid;
+    if (userId == null || deviceId.isEmpty) return;
+    await _rtdb.ref('devices/$deviceId/fcmTokens/$userId').remove();
   }
 }

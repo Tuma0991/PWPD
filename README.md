@@ -96,27 +96,25 @@ flutter run
 
 ## 🔌 ESP32 Firebase Data Structure
 
-The ESP32 pushes data to Firebase Realtime Database at this path:
+The ESP32 pushes data to Firebase Realtime Database at this path. The device ID is auto-generated as `guardian_<mac>` and provisioned to the app over BLE during setup.
 
 ```
-/devices/esp32_device_1/
+/devices/{deviceId}/
 ├── sensors/
 │   ├── gps/
-│   │   ├── lat: 10.3157
-│   │   └── lng: 123.8854
+│   │   ├── lat / lng / fixUtc
 │   ├── accelerometer/
-│   │   ├── x: 0.12
-│   │   ├── y: -0.03
-│   │   └── z: 9.81
+│   │   ├── x / y / z          (snapshot, sent with each heartbeat)
 │   ├── fallDetected: false
 │   ├── online: true
-│   └── timestamp: 1234567890
-└── emergency/
-    ├── active: false
-    ├── reason: "Fall detected"
-    ├── lat: 10.3157
-    ├── lng: 123.8854
-    └── triggeredAt: 1234567890
+│   ├── timestamp: 1234567890   (server timestamp)
+│   ├── hbIntervalS: 120        (heartbeat interval, seconds)
+│   └── mode / rssi / imuOk / firmware
+├── emergency/
+│   ├── active / reason / triggeredAt / lat / lng / locAgeS / eventUtc
+├── geofences/                  (array written by the app)
+├── geofence_violations/{pushId}
+└── commands/                   (locateNow, refreshGeofences — optional)
 ```
 
 ---
@@ -126,20 +124,13 @@ The ESP32 pushes data to Firebase Realtime Database at this path:
 1. Open `esp32_firmware/guardian_firmware.ino` in Arduino IDE
 
 2. Install these libraries via Library Manager:
-   - `Firebase ESP32 Client` by mobizt
    - `TinyGPS++` by Mikal Hart
    - `MPU6050` by Electronic Cats
    - `ArduinoJson` by Benoit Blanchon
 
-3. Update these values in the firmware:
-```cpp
-#define WIFI_SSID       "YOUR_WIFI_SSID"
-#define WIFI_PASSWORD   "YOUR_WIFI_PASSWORD"
-#define FIREBASE_HOST   "YOUR_PROJECT_ID.firebaseio.com"
-#define FIREBASE_AUTH   "YOUR_DATABASE_SECRET"
-```
+3. Copy `ESP32_CONFIG_TEMPLATE.h` to `secrets.h` (same folder as the `.ino`) and fill in your Firebase host + auth. Add `secrets.h` to `.gitignore` — never commit it.
 
-4. Upload to ESP32 → Open Serial Monitor → Should show "Firebase connected"
+4. Board: "ESP32S3 Dev Module", esp32 core 3.x, USB CDC On Boot **Enabled**. Upload → Open Serial Monitor (115200) → watch the `[STATUS]` line.
 
 ---
 
@@ -178,9 +169,9 @@ Firestore (alert logged) + Push Notification
 
 ## 🛠️ Customization
 
-- **Change Device ID**: Update `_deviceId` in `home_screen.dart` and `DEVICE_ID` in firmware
-- **Fall Threshold**: Adjust `FALL_ACCEL_THRESHOLD` in firmware (default: 2.5g)
-- **Update Frequency**: Adjust `UPDATE_INTERVAL_MS` (default: 2000ms = 2 seconds)
+- **Device ID**: auto-generated (`guardian_<mac>`) and provisioned over BLE — no manual ID to set
+- **Fall Threshold**: adjust `IMPACT_G` / `IMPACT_STRONG_G` / `FREEFALL_G` in section 1 of the firmware
+- **Heartbeat / battery**: adjust `HEARTBEAT_ACTIVE_MS`, `HEARTBEAT_RESTING_MS`, and the GPS duty-cycle constants in section 1
 - **App Colors**: Edit `lib/theme.dart`
 
 ---
@@ -192,6 +183,7 @@ Firestore (alert logged) + Push Notification
 - **Firebase Realtime Database** — Live ESP32 sensor data
 - **Cloud Firestore** — Alert history & contacts
 - **flutter_map + OpenStreetMap** — Live GPS map (free, no API key)
-- **ESP32** — Microcontroller
+- **ESP32-S3** — Microcontroller
 - **MPU6050** — Accelerometer (fall detection)
-- **NEO-6M GPS** — Location tracking
+- **GT-U8 GPS** — Location tracking
+- **TP4056 + boost converter + power switch** — Battery charging and 5 V power

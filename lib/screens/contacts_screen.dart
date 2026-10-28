@@ -159,6 +159,7 @@ class ContactsScreen extends StatelessWidget {
     final relCtrl =
         TextEditingController(text: existing?.relationship ?? '');
     bool isEmergency = existing?.isEmergencyContact ?? false;
+    String carrier = existing?.carrier ?? '';
 
     showModalBottomSheet(
       context: context,
@@ -230,6 +231,45 @@ class ContactsScreen extends StatelessWidget {
                 icon: Icons.family_restroom,
               ),
               const SizedBox(height: 14),
+              // Carrier selector (shown only for emergency contacts — needed for SMS)
+              if (isEmergency)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 14),
+                  child: Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF7F9FF),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: const Color(0xFFDDE3F0)),
+                    ),
+                    child: DropdownButtonFormField<String>(
+                      value: carrierSmsGateways.containsKey(carrier)
+                          ? carrier
+                          : null,
+                      decoration: const InputDecoration(
+                        labelText: 'Mobile Carrier (for SMS alerts)',
+                        icon: Icon(Icons.sim_card_outlined,
+                            color: Color(0xFF1565C0), size: 20),
+                        border: InputBorder.none,
+                        contentPadding:
+                            EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+                      ),
+                      hint: const Text('Select carrier'),
+                      items: carrierSmsGateways.entries
+                          .map((e) => DropdownMenuItem(
+                                value: e.key,
+                                child: Text(e.key,
+                                    style: const TextStyle(fontSize: 14)),
+                              ))
+                          .toList(),
+                      onChanged: (v) =>
+                          setModalState(() => carrier = v ?? ''),
+                      dropdownColor: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                ),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
                 decoration: BoxDecoration(
@@ -245,7 +285,10 @@ class ContactsScreen extends StatelessWidget {
                 ),
                 child: SwitchListTile(
                   value: isEmergency,
-                  onChanged: (v) => setModalState(() => isEmergency = v),
+                  onChanged: (v) => setModalState(() {
+                    isEmergency = v;
+                    if (!v) carrier = '';
+                  }),
                   title: Text(
                     'Emergency Contact',
                     style: TextStyle(
@@ -257,7 +300,7 @@ class ContactsScreen extends StatelessWidget {
                     ),
                   ),
                   subtitle: const Text(
-                    'Will be notified first during alerts',
+                    'Will be notified via SMS during alerts',
                     style: TextStyle(fontSize: 12, color: Color(0xFF6B7A99)),
                   ),
                   activeColor: const Color(0xFFE53935),
@@ -277,6 +320,7 @@ class ContactsScreen extends StatelessWidget {
                       name: nameCtrl.text.trim(),
                       phone: phoneCtrl.text.trim(),
                       relationship: relCtrl.text.trim(),
+                      carrier: isEmergency ? carrier : '',
                       isEmergencyContact: isEmergency,
                     );
                     if (existing == null) {
@@ -494,10 +538,33 @@ class _ContactCard extends StatelessWidget {
                   ],
                 ),
                 const SizedBox(height: 2),
-                Text(
-                  contact.phone,
-                  style: const TextStyle(
-                      fontSize: 12, color: Color(0xFF6B7A99)),
+                Row(
+                  children: [
+                    Flexible(
+                      child: Text(
+                        contact.phone,
+                        style: const TextStyle(
+                            fontSize: 12, color: Color(0xFF6B7A99)),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    if (contact.carrier.isNotEmpty) ...[
+                      const SizedBox(width: 6),
+                      Icon(Icons.sim_card_outlined,
+                          size: 11, color: color.withOpacity(0.6)),
+                      const SizedBox(width: 2),
+                      Flexible(
+                        child: Text(
+                          contact.carrier,
+                          style: TextStyle(
+                              fontSize: 10,
+                              color: color.withOpacity(0.7),
+                              fontWeight: FontWeight.w600),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
                 if (contact.relationship.isNotEmpty)
                   Text(

@@ -6,6 +6,12 @@
 	<string>This app uses Bluetooth to set up your Guardian wearable device with WiFi credentials.</string>
 	<key>NSBluetoothPeripheralUsageDescription</key>
 	<string>This app uses Bluetooth to securely send WiFi credentials to your Guardian device.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>This app uses the camera to take a photo of the wearer shown on the map.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>This app accesses your photo library so you can set a wearer photo shown on the map.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>This app shows your location on the map and routes you to the wearer during an emergency.</string>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
 	<key>CFBundleDevelopmentRegion</key>

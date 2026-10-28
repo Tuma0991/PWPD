@@ -11,7 +11,7 @@ Project-specific development patterns and conventions for the Guardian IoT Weara
 
 - **Mobile**: Flutter/Dart (Material 3, `flutter_map`, `firebase_*` packages)
 - **Backend**: Firebase (Auth, Firestore, Realtime Database)
-- **Firmware**: ESP32 with Arduino C++ (MPU6050 + NEO-6M GPS)
+- **Firmware**: ESP32-S3 with Arduino C++ (MPU6050 + GT-U8 GPS)
 - **Primary Language**: Dart
 
 ## When to Use This Skill

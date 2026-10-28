@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-IoT Wearable Protection Device ("Guardian") — a Flutter mobile app paired with ESP32 firmware and a Firebase backend. The ESP32 (with MPU6050 accelerometer + NEO-6M GPS) pushes sensor data to Firebase Realtime Database every 2 seconds. The Flutter app listens via RTDB streams for live updates and uses Firestore for persistent data (contacts, geofences, alert history).
+IoT Wearable Protection Device ("Guardian") — a Flutter mobile app paired with ESP32 firmware and a Firebase backend. The ESP32-S3 (with MPU6050 accelerometer + GT-U8 GPS) is event-driven: it samples the IMU at 100 Hz for on-device fall detection and uploads to Firebase Realtime Database only on events and a slow heartbeat (2 min active / 5 min resting), with duty-cycled GPS. The Flutter app listens via RTDB streams and uses Firestore for persistent data (contacts, geofences, alert history).
 
 ## Commands
 
@@ -53,7 +53,7 @@ Flutter App  ↔ Firebase Auth (email/password)
 
 ### Models
 
-- `DeviceData` — parsed from RTDB sensor snapshots. Online/offline detection via timestamp staleness (10s threshold), computed `accelMagnitude`, `lastSeenLabel`, `copyWith`.
+- `DeviceData` — parsed from RTDB sensor snapshots. Online/offline detection via timestamp staleness scaled to the device's reported `hbIntervalS` (2.5×, ~5 min active / 12.5 min resting), computed `accelMagnitude`, `lastSeenLabel`, `copyWith`.
 - `ContactModel` — Firestore-backed with `id`, `name`, `phone`, `relationship`, `isEmergencyContact`.
 - `GeofenceModel` — Firestore-backed with `latitude`, `longitude`, `radiusMeters`, `enabled`, etc.
 
@@ -67,4 +67,4 @@ Uses `flutter_map` with OpenStreetMap tiles (no API key required) via `flutter_m
 
 ## ESP32 Firmware
 
-Located in `esp32_firmware/guardian_firmware/`. Arduino C++ project targeting ESP32. Key config: WiFi credentials, Firebase host/auth, `DEVICE_ID`, `FALL_ACCEL_THRESHOLD` (2.5g default), `UPDATE_INTERVAL_MS` (2000ms default). Requires libraries: Firebase ESP32 Client (mobizt), TinyGPS++, MPU6050 (Electronic Cats), ArduinoJson. Configuration template at `ESP32_CONFIG_TEMPLATE.h`.
+Located in `esp32_firmware/guardian_firmware/`. Arduino C++ project (v2.0.0) targeting ESP32-S3 SuperMini. Event-driven and low-power: 100 Hz IMU sampling, on-device fall detection with a 15 s "I'm OK" cancel window, duty-cycled GPS, and a FreeRTOS network task (core 0) that uploads only on events + heartbeat. Private settings live in `secrets.h` (gitignored — see `ESP32_CONFIG_TEMPLATE.h` for the layout); tunables are in section 1 of the `.ino`. Requires libraries: TinyGPSPlus, MPU6050 (Electronic Cats), ArduinoJson (the old Firebase ESP32 Client is not used). Device ID is auto-generated (`guardian_<mac>`) and provisioned over BLE.

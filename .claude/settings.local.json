@@ -3,7 +3,17 @@
     "allow": [
       "Bash(flutter analyze *)",
       "Bash(xxd)",
-      "mcp__ide__getDiagnostics"
+      "mcp__ide__getDiagnostics",
+      "Bash(flutter test *)",
+      "Bash(firebase --version)",
+      "Bash(firebase use *)",
+      "Bash(npm --version)",
+      "Bash(npx --version)",
+      "Bash(npx --yes firebase-tools functions:list --project pwpd-5e580)",
+      "Bash(flutter --version)",
+      "Bash(flutter pub *)",
+      "Read(//c/Users/tumat/AppData/Local/Pub/Cache/hosted/pub.dev/**)",
+      "Bash(python *)"
     ]
   }
 }

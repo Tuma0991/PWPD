@@ -6,6 +6,7 @@ import 'package:permission_handler/permission_handler.dart';
 import '../services/ble_service.dart';
 import '../services/device_config_service.dart';
 import '../services/firebase_service.dart';
+import '../widgets/toast_notification.dart';
 
 enum SetupStep { scan, enterWifi, provisioning, success, error }
 
@@ -39,8 +40,25 @@ class _DeviceSetupScreenState extends State<DeviceSetupScreen> {
   String? _provisionedDeviceId;
   String _provisioningStatus = '';
 
+  // Bluetooth adapter tracking (for the "Bluetooth is off" notification)
+  StreamSubscription<BluetoothAdapterState>? _adapterSub;
+  bool? _btOn;
+
+  void _showBluetoothOffToast() {
+    if (!mounted) return;
+    ToastNotification.show(
+      context,
+      title: 'Bluetooth is off',
+      message: 'Turn on Bluetooth to scan for your Guardian device.',
+      icon: Icons.bluetooth_disabled,
+      owner: this,
+    );
+  }
+
   @override
   void dispose() {
+    _adapterSub?.cancel();
+    ToastNotification.dismiss(owner: this);
     _scanSub?.cancel();
     _ssidCtrl.dispose();
     _passCtrl.dispose();
@@ -50,6 +68,19 @@ class _DeviceSetupScreenState extends State<DeviceSetupScreen> {
   @override
   void initState() {
     super.initState();
+    // Live Bluetooth state: toast when it's switched off, dismiss when on.
+    _adapterSub = FlutterBluePlus.adapterState.listen((state) {
+      if (!mounted) return;
+      final on = state == BluetoothAdapterState.on;
+      final wasOn = _btOn;
+      _btOn = on;
+      if (on) {
+        ToastNotification.dismiss(owner: this);
+      } else if (wasOn == true && _step == SetupStep.scan) {
+        setState(() => _isScanning = false);
+        _showBluetoothOffToast();
+      }
+    });
     _startScan();
   }
 
@@ -108,12 +139,13 @@ class _DeviceSetupScreenState extends State<DeviceSetupScreen> {
     // Check Bluetooth adapter state
     final btState = await FlutterBluePlus.adapterState.first;
     if (btState != BluetoothAdapterState.on) {
-      setState(() {
-        _isScanning = false;
-        _errorMessage = 'Bluetooth is not enabled. Please turn on Bluetooth.';
-      });
+      _btOn = false;
+      if (!mounted) return;
+      setState(() => _isScanning = false);
+      _showBluetoothOffToast();
       return;
     }
+    _btOn = true;
 
     // Request runtime permissions (critical on Android 12+)
     if (!await _checkPermissions()) {

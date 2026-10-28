@@ -23,6 +23,10 @@ migrate_working_dir/
 # is commented out by default.
 #.vscode/
 
+# Node.js / Firebase functions
+node_modules/
+**/node_modules/
+
 # Flutter/Dart/Pub related
 **/doc/api/
 **/ios/Flutter/.last_build_id
@@ -35,6 +39,9 @@ migrate_working_dir/
 
 # Symbolication related
 app.*.symbols
+
+# ESP32 firmware secrets (never commit credentials)
+secrets.h
 
 # Obfuscation related
 app.*.map.json

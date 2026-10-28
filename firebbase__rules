@@ -1,0 +1,34 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Allow users to read/write their own user document and subcollections
+    match /users/{userId} {
+      allow read, write: if request.auth.uid == userId;
+      
+      // Allow authenticated users to read/write their geofences
+      match /geofences/{document=**} {
+        allow read, write: if request.auth.uid == userId;
+      }
+      
+      // Allow authenticated users to read/write alerts
+      match /alerts/{document=**} {
+        allow read, write: if request.auth.uid == userId;
+      }
+      
+      // Allow authenticated users to read/write geofence violations
+      match /geofence_violations/{document=**} {
+        allow read, write: if request.auth.uid == userId;
+      }
+      
+      // Allow authenticated users to read/write contacts
+      match /contacts/{document=**} {
+        allow read, write: if request.auth.uid == userId;
+      }
+
+      // Allow authenticated users to read/write their device settings (wearer name + photo)
+      match /devices/{document=**} {
+        allow read, write: if request.auth.uid == userId;
+      }
+    }
+  }
+}

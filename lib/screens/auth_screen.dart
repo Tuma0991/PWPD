@@ -172,10 +172,13 @@ class _AuthScreenState extends State<AuthScreen>
                           width: 2,
                         ),
                       ),
-                      child: const Icon(
-                        Icons.shield,
-                        color: Colors.white,
-                        size: 38,
+                      child: ClipOval(
+                        child: Image.asset(
+                          'lib/images/Logo.png',
+                          width: 72,
+                          height: 72,
+                          fit: BoxFit.cover,
+                        ),
                       ),
                     ),
                     const SizedBox(height: 22),

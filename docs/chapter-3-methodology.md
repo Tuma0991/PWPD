@@ -18,7 +18,7 @@ Caregivers of elderly individuals, young children, and persons with medical cond
 
 The GuardianNako system consists of three integrated components:
 
-1. **ESP32 Wearable Device** — A small, low-cost hardware device worn by the protected person. It contains an MPU6050 accelerometer for motion sensing, a NEO-6M GPS module for location tracking, a physical SOS button for manual emergency activation, and a status LED for visual feedback. The device connects to the internet via WiFi and transmits sensor data every two seconds.
+1. **ESP32 Wearable Device** — A small, low-cost hardware device worn by the protected person. It contains an MPU6050 accelerometer for motion sensing, a GT-U8 GPS module for location tracking, a physical SOS button for manual emergency activation, and a status LED for visual feedback. The device connects to the internet via WiFi and transmits sensor data every two seconds.
 
 2. **Flutter Mobile Application** — A cross-platform mobile app used by the guardian or parent. It displays a live dashboard with real-time sensor readings, a GPS map showing the wearer's location, fall detection status, emergency alert banners, geofence management tools, and an emergency contact list with tap-to-dial functionality.
 
@@ -72,7 +72,7 @@ The system is defined by ten use cases across four functional groups, plus two s
 - **Real-time responsiveness**: Sensor data and emergency alerts must reach the guardian's app within two seconds of being transmitted by the device.
 - **Reliability**: The emergency alert mechanism must function even when GPS has no fix, falling back to the last known location.
 - **Usability**: The guardian's app must present complex sensor data in an intuitive, glanceable format suitable for non-technical users.
-- **Affordability**: The system must use off-the-shelf, low-cost hardware components (ESP32 development board, MPU6050, NEO-6M GPS) and open-source software libraries with no recurring API fees (OpenStreetMap instead of Google Maps).
+- **Affordability**: The system must use off-the-shelf, low-cost hardware components (ESP32 development board, MPU6050, GT-U8 GPS) and open-source software libraries with no recurring API fees (OpenStreetMap instead of Google Maps).
 - **Offline awareness**: The app must clearly indicate when the device goes offline (no update received for 10 seconds).
 - **Deduplication**: The system must prevent duplicate emergency alerts from the same triggering event.
 
@@ -153,7 +153,7 @@ The Level 2 DFDs decompose five of the six Level 1 processes into their constitu
 This ESP32-side process is decomposed into four sub-processes:
 
 - **1.1 Read Accelerometer Sensor**: Reads the MPU6050 accelerometer via the I2C bus, capturing three-axis acceleration values (ax, ay, az) in g-force units.
-- **1.2 Read GPS Module**: Reads the NEO-6M GPS module via UART serial, parsing NMEA sentences to extract latitude and longitude when a fix is available.
+- **1.2 Read GPS Module**: Reads the GT-U8 GPS module via UART serial, parsing NMEA sentences to extract latitude and longitude when a fix is available.
 - **1.3 Detect Falls**: Calculates the overall movement magnitude from the three accelerometer axes. If the magnitude exceeds the 2.5g threshold, sets the fall detection flag to true.
 - **1.4 Push Sensor Data to Firebase**: Assembles a JSON payload containing GPS coordinates, accelerometer values, fall detection flag, online heartbeat, and a server timestamp. Pushes this payload to RTDB under the device's sensor path every two seconds. Also controls the status LED.
 
@@ -240,9 +240,10 @@ The system follows a three-tier logical architecture with clear separation of co
 
 **Tier 1 — Wearable Device (ESP32)**: The hardware layer worn by the protected person. It contains:
 - An MPU6050 accelerometer connected via I2C for three-axis motion sensing
-- A NEO-6M GPS module connected via UART serial for location tracking
+- A GT-U8 GPS module connected via UART serial for location tracking
 - A physical SOS button on GPIO4 (active LOW) with debounce protection
 - A status LED on GPIO2 indicating power, connectivity, and alert state
+- A 3.7 V Li-Po battery with a TP4056 charging module, a 5 V boost converter, and a power switch between the charger and the boost converter
 - WiFi connectivity for cloud communication
 - Bluetooth Low Energy (BLE) for one-time device provisioning
 - Non-volatile storage (NVS) for persisting WiFi credentials and device identity
@@ -292,12 +293,15 @@ The wearable device is built from the following hardware components:
 
 | Component | Model | Interface | Purpose |
 |-----------|-------|-----------|---------|
-| Microcontroller | ESP32 Development Board | — | Main processing unit with built-in WiFi and Bluetooth |
+| Microcontroller | ESP32-S3 SuperMini | — | Main processing unit with built-in WiFi and Bluetooth |
 | Accelerometer | MPU6050 | I2C | Three-axis motion and acceleration sensing |
-| GPS Module | NEO-6M | UART Serial | Satellite-based location tracking |
+| GPS Module | GT-U8 | UART Serial | Satellite-based location tracking |
 | SOS Button | Tactile push button | GPIO4 (active LOW) | Manual emergency activation by the wearer |
 | Status LED | Single-color LED | GPIO2 | Visual feedback for power, connectivity, and alert state |
-| Power Supply | Battery or USB | — | Portable power for the wearable device |
+| Battery | Li-Po 3.7 V (1000 mAh) | — | Rechargeable power source |
+| Charging Module | TP4056 (protected, USB-C) | — | Charges the battery at 1 A |
+| Boost Converter | Mini DC-DC boost (set to 5 V) | — | Steps 3.7 V up to a stable 5 V for the ESP32 |
+| Power Switch | SPST slide switch | — | Cuts power between the charging module and the boost converter |
 
 ### 3.4.2 Software Tools and Technologies
 
@@ -417,6 +421,6 @@ System analysis produced a set of ten functional use cases organized into four g
 
 System design produced a context diagram establishing the system boundary with five external entities, a use case diagram modeling actor interactions, a Level 1 data flow diagram with six processes and nine logical data stores, five Level 2 diagrams decomposing the major processes, an entity relationship diagram spanning Firestore and RTDB with eight entities and ten relationships, a three-tier system architecture separating hardware, cloud, and application concerns, and a six-tab user interface design for the mobile application.
 
-System development detailed the hardware components (ESP32, MPU6050, NEO-6M GPS, SOS button, status LED), the software tools and technologies (Flutter, Dart, Arduino C++, Firebase), the firmware and application library dependencies, and implementation highlights including the FirebaseService singleton pattern, authentication gating, the real-time data model, geofence enforcement and fall detection algorithms, emergency deduplication, offline detection, and BLE device provisioning.
+System development detailed the hardware components (ESP32, MPU6050, GT-U8 GPS, SOS button, status LED), the software tools and technologies (Flutter, Dart, Arduino C++, Firebase), the firmware and application library dependencies, and implementation highlights including the FirebaseService singleton pattern, authentication gating, the real-time data model, geofence enforcement and fall detection algorithms, emergency deduplication, offline detection, and BLE device provisioning.
 
 System testing covered four levels — unit, integration, system, and acceptance — with specific test scenarios for each use case and dedicated test cases for the five critical functions: fall detection, SOS button, geofence violation, offline detection, and BLE provisioning.

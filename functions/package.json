@@ -1,0 +1,14 @@
+{
+  "name": "guardian-functions",
+  "description": "Cloud Functions for Guardian IoT — push notifications + SMS alerts",
+  "engines": {
+    "node": "22"
+  },
+  "main": "index.js",
+  "dependencies": {
+    "firebase-admin": "^14.3.0",
+    "firebase-functions": "^7.3.2",
+    "nodemailer": "^9.0.5"
+  },
+  "private": true
+}

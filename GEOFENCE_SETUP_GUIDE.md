@@ -2,43 +2,43 @@
 
 ## Overview
 
-The **Geofence Feature** enables users to define custom geographic zones and receive notifications when a device enters or exits these zones. This is useful for:
+The **Geofence Feature** lets users draw custom **polygon zones** and get notified when the device enters or exits them. Useful for:
 
 - **Safety Monitoring**: Know when your elderly relative leaves home or a safe zone
-- **Activity Tracking**: Track when someone arrives at work, school, or other important locations
-- **Boundary Alerts**: Get notified if the wearer goes too far from home
-- **Multiple Zones**: Create multiple geofences for different locations
+- **Activity Tracking**: Track when someone arrives at work, school, or another location
+- **Boundary Alerts**: Get notified if the wearer strays outside a defined area
+- **Multiple Zones**: Create multiple polygons for different locations
 
-**No API Keys Required** ✅ - This feature works with coordinates only (no maps needed)
+**No API Keys Required** ✅ - This feature works with coordinates only (no map API needed; the map uses free OpenStreetMap tiles).
 
 ---
 
 ## System Architecture
 
 ```
-┌─────────────────────────────────────┐
-│      Flutter Mobile App              │
-│  ┌───────────────────────────────┐  │
-│  │  Geofence Management Screen   │  │
-│  │  - Add/Edit/Delete Zones      │  │
-│  │  - Visual Map with Circles    │  │
-│  │  - Enable/Disable Toggle      │  │
-│  └───────────────────────────────┘  │
-└──────────────┬──────────────────────┘
+┌─────────────────────────────────────────┐
+│      Flutter Mobile App                 │
+│  ┌───────────────────────────────────┐  │
+│  │  Geofence Management Screen       │  │
+│  │  - Draw polygon on map            │  │
+│  │  - Add/Edit/Delete zones          │  │
+│  │  - Enable/Disable toggle          │  │
+│  └───────────────────────────────────┘  │
+└──────────────┬──────────────────────────┘
                │
                ▼ (Firestore)
 ┌────────────────────────────────────────────┐
 │  Firebase Cloud Database                   │
 │  ┌──────────────────────────────────────┐  │
 │  │ users/{userId}/geofences/{id}       │  │
-│  │ - name, latitude, longitude         │  │
-│  │ - radiusMeters, enabled             │  │
+│  │ - name, vertices:[{lat,lng}],       │  │
+│  │   enabled, createdAt, updatedAt     │  │
 │  │                                       │  │
 │  │ users/{userId}/geofence_violations/ │  │
 │  │ - geofenceId, type, location        │  │
 │  └──────────────────────────────────────┘  │
 │                                             │
-│  RTDB: devices/{deviceId}/geofences/      │
+│  RTDB: devices/{deviceId}/geofences/       │
 │  (synced from Firestore for device access) │
 └──────────────┬──────────────────────────────┘
                │
@@ -47,11 +47,10 @@ The **Geofence Feature** enables users to define custom geographic zones and rec
 ┌─────────────────┐      ┌──────────────────────┐
 │  ESP32 Device   │      │  Firebase Cloud      │
 │                 │      │  Functions           │
-│ - Fetch zones   │◄─────│  (optional: send     │
-│ - GPS location  │      │   push notifications)│
-│ - Calculate     │      └──────────────────────┘
-│   distance      │
-│ - Check bounds  │
+│ - Fetch zones   │◄─────│  (push + SMS on     │
+│ - GPS fix       │      │   violation)         │
+│ - Point-in-poly │      └──────────────────────┘
+│ - Confirm state │
 │ - Log violations│
 └─────────────────┘
 ```
@@ -63,63 +62,56 @@ The **Geofence Feature** enables users to define custom geographic zones and rec
 ### 1. **Geofence Management Screen**
 Located in the bottom navigation bar under "Geofences"
 
-#### Add a New Geofence:
-1. Tap the **+** button in the top-right
-2. Enter the **Zone Name** (e.g., "Home", "Work", "School")
-3. Enter **Latitude** (decimal format, e.g., 40.7128)
-4. Enter **Longitude** (decimal format, e.g., -74.0060)
-5. Adjust the **Radius slider** (100m - 5km)
-6. Tap "Create"
-7. The geofence is instantly synced to the ESP32 device
+#### Add a New Geofence (Polygon):
+1. Tap **Add Polygon** in the bottom-right
+2. Tap the map to place vertices — you need **at least 3 points** to form a valid polygon
+3. Enter a **Polygon Name** (e.g., "Home", "Work", "School")
+4. Tap **Save Polygon**
+5. The polygon is saved to Firestore and instantly synced to the ESP32 device
 
-**How to Find Coordinates:**
-- Use Google Maps: Right-click on location → Copy coordinates
-- Use GPS apps: Check your device's location
-- Ask the device to report current location
-- Search online: "[Place Name] coordinates"
-
-Example:
-- New York: 40.7128°N, 74.0060°W
-- San Francisco: 37.7749°N, 122.4194°W
-- London: 51.5074°N, 0.1278°W
+**How to Find Coordinates / Draw a Zone:**
+- The map is OpenStreetMap — pan/zoom to the area and tap to trace the boundary
+- Use Google Maps to look up a place, then trace the equivalent shape in the app
+- Ask the device to report its current location, then draw a polygon around it
 
 #### Edit a Geofence:
-1. Tap on a geofence in the list
-2. Tap "Edit" button
-3. Modify name, coordinates, or radius
-4. Tap "Save"
+1. Tap a geofence in the list
+2. Tap "Edit"
+3. Move/add/remove vertices or rename the polygon
+4. Tap "Update Polygon"
 
 #### Delete a Geofence:
-1. Tap on a geofence in the list
-2. Tap "Delete" button
+1. Tap a geofence in the list
+2. Tap "Delete"
 3. Confirm deletion
 
 #### Enable/Disable Zones:
 - Toggle the switch on each geofence card
-- Disabled zones won't trigger violations
+- Disabled zones are not synced to the device and won't trigger violations
 - Useful for temporarily pausing monitoring without deleting
 
 ### 2. **Geofence List View**
-- Simple list showing all created geofences
-- See coordinates in decimal format (6 decimal places ≈ 0.1 meter accuracy)
-- Status indicator showing enabled/disabled
-- Tap to expand for more options
+- List showing all created polygons
+- Shows the vertex count and a preview of the first vertex
+- Live inside/outside status per zone (green = inside, red = outside, blue = unknown)
+- Tap to edit, delete, or toggle
 
 ### 3. **Violation Logging**
 When the device exits or enters a geofence:
-- ✅ Logged to user's **Geofence Violations** collection
-- ✅ Sent to app's Alert History
-- ✅ Viewable in **Alerts** screen
-- Data format:
+- ✅ Logged to `/devices/{deviceId}/geofence_violations/{pushId}` in RTDB
+- ✅ Bridged to Firestore `users/{userId}/geofence_violations/` and Alert History
+- ✅ Viewable in the **Alerts** screen
+- Data format (written by the ESP32):
   ```json
   {
     "geofenceId": "zone_123",
     "name": "Home",
-    "type": "exited",  // or "entered"
-    "latitude": 37.7749,
-    "longitude": -122.4194,
-    "distance": 520.5,  // meters from geofence center
-    "timestamp": 1681234567890
+    "type": "exited",   // or "entered"
+    "lat": 37.7749,
+    "lng": -122.4194,
+    "distance": 520.5,  // meters from the polygon centroid
+    "eventUtc": 1681234567,
+    "timestamp": 1681234567890   // server timestamp (.sv)
   }
   ```
 
@@ -129,46 +121,26 @@ When the device exits or enters a geofence:
 
 ### Part 1: App Configuration
 
-**No API keys needed!** The geofence screen uses a simple form-based interface with no external dependencies.
-
-Just add the Geofence Screen to your bottom navigation bar:
-
-1. Open `lib/main.dart`
-2. Add to navigation items:
-   ```dart
-   BottomNavigationBarItem(
-     icon: Icon(Icons.location_on_outlined),
-     activeIcon: Icon(Icons.location_on),
-     label: 'Geofences',
-   ),
-   ```
-
-3. Add to the body widget selector:
-   ```dart
-   case 3:  // Add after other tabs
-     return GeofenceScreen(userId: userId, deviceId: deviceId);
-   ```
-
-That's it! No dependencies to install, no API keys to configure.
+**No API keys needed!** The geofence screen is already wired into the bottom navigation bar (the "Geofences" tab). No code changes are required — the screen, model, and sync logic all live in the app already.
 
 ### Part 2: ESP32 Firmware
 
-1. **Verify Includes**
-   - Ensure your firmware includes Arduino JSON library:
-   ```bash
-   // In Arduino IDE:
-   // Sketch → Include Library → Manage Libraries
-   // Search for "ArduinoJson" and install
-   ```
+1. **Verify Libraries**
+   - The firmware needs the ArduinoJson library (already listed in `ESP32_CONFIG_TEMPLATE.h`):
+     ```
+     ArduinoJson by Benoit Blanchon (6.x recommended)
+     ```
 
 2. **Verify Firebase Path Configuration**
-   - Geofences are read from: `/devices/{DEVICE_ID}/geofences`
-   - Violations logged to: `/devices/{DEVICE_ID}/geofence_violations/{timestamp}`
+   - Geofences are read from: `/devices/{deviceId}/geofences` (an array written by the app)
+   - Violations are logged to: `/devices/{deviceId}/geofence_violations/{pushId}`
 
 3. **GPS Configuration**
-   - Geofencing requires valid GPS signal
-   - ESP32 will print "[GEOFENCE] Waiting for GPS fix..." until GPS is available
-   - May take 30-60 seconds to get first GPS fix outdoors
+   - Geofencing requires a valid GPS fix
+   - The device duty-cycles GPS and only wakes it to check geofences when configured:
+     - `GPS_ACTIVE_INTERVAL_MS` = 60000 (1 min) when geofences exist
+     - `GPS_ACTIVE_NOFENCE_MS` = 300000 (5 min) when none
+   - May take 5-10 minutes outdoors for the first GPS lock
 
 ### Part 3: Firebase Configuration
 
@@ -180,12 +152,12 @@ service cloud.firestore {
     // Users collection
     match /users/{userId} {
       allow read, write: if request.auth.uid == userId;
-      
+
       // Geofences subcollection
       match /geofences/{document=**} {
         allow read, write: if request.auth.uid == userId;
       }
-      
+
       // Geofence violations
       match /geofence_violations/{document=**} {
         allow read, write: if request.auth.uid == userId;
@@ -202,7 +174,8 @@ service cloud.firestore {
     "devices": {
       "$deviceId": {
         "geofences": {".read": true, ".write": true},
-        "geofence_violations": {".read": true, ".write": true}
+        "geofence_violations": {".read": true, ".write": true},
+        "commands": {".read": true, ".write": true}
       }
     }
   }
@@ -214,24 +187,18 @@ service cloud.firestore {
 ## How It Works
 
 ### On the App
-1. User creates geofence: `GeofenceScreen` → `firebase.addGeofence()`
-2. Geofence saved to Firestore: `users/{userId}/geofences/{id}`
-3. Synced to device RTDB: `devices/{deviceId}/geofences`
-4. User can view/edit geofences on interactive map
-5. Violations appear in Alert History
+1. User draws a polygon: `GeofenceScreen` → `firebase.addGeofence()`
+2. Geofence saved to Firestore: `users/{userId}/geofences/{id}` (with `vertices`)
+3. Synced to device RTDB: `devices/{deviceId}/geofences` (an array of `{id, name, vertices}`)
+4. User can view/edit polygons on the interactive map
+5. Violations appear in Alert History and as in-app SnackBar notifications
 
 ### On the ESP32 Device
-1. **Initialization**: Firmware calls `fetchGeofences()` on startup
-2. **Periodic Check**: Every 30 seconds, `checkGeofences()` is called
-3. **Distance Calculation**: Uses Haversine formula to calculate distance from GPS to each geofence center
-4. **State Change Detection**: Compares current position to previous state to detect "entered" or "exited"
-5. **Violation Logging**: On state change, RTDB logs to `/devices/{deviceId}/geofence_violations/`
-6. **Serial Debugging**: Prints geofence checks to serial monitor:
-   ```
-   [GEOFENCE CHECK] Location: 37.7749, -122.4194
-   [GEOFENCE] Zone 'Work': entered (distance: 120.5 m)
-   [GEOFENCE CHECK] Complete
-   ```
+1. **Download**: `fetchGeofences()` runs on startup, every `GEOFENCE_REFRESH_MS` (10 min), and when `commands/refreshGeofences` is set
+2. **Evaluate on each GPS fix**: `geofenceEvaluate()` runs point-in-polygon for every valid fix — there is no fixed 30-second polling loop; it's event-driven off the GPS duty cycle
+3. **Confirm state change**: a zone only flips state after `GEOFENCE_CONFIRM_FIXES` (2) consecutive fixes that disagree with the current state, spaced `GEOFENCE_CONFIRM_GAP_MS` (5 s) apart — this suppresses GPS jitter at boundaries
+4. **Log violation**: on a confirmed enter/exit, the device POSTs to `/devices/{deviceId}/geofence_violations/`
+5. **Serial debugging**: prints geofence activity to the serial monitor (see below)
 
 ---
 
@@ -239,27 +206,22 @@ service cloud.firestore {
 
 ### Successful Setup
 ```
-=== ESP32 Guardian Firmware Started ===
-Ready for operation.
-[GEOFENCE] Fetched 2 geofences from Firebase
+=== Guardian Firmware v2.0.0 ===
+[GEOFENCE] 2 geofence(s) loaded
 
-[GEOFENCE CHECK] Location: 37.7749, -122.4194
-[GEOFENCE] Zone 'Home': entered (distance: 200.5 m)
-[GEOFENCE] Zone 'Work': exited (distance: 8500.0 m)
-[GEOFENCE CHECK] Complete
-
-Geofence violation logged to Firebase
-```
-
-### Waiting for GPS
-```
-[GEOFENCE] Waiting for GPS fix...
-[STATUS] Button State: Released | Emergency Active: NO | WiFi: Connected
+[GEOFENCE] 'Home' exited
+[GEOFENCE] 'Work' entered
 ```
 
 ### No Geofences
 ```
-[GEOFENCE] Fetched 0 geofences from Firebase
+[GEOFENCE] 0 geofence(s) loaded
+```
+
+### Refresh / Command
+```
+[CMD] locateNow=0 refreshGeofences=1
+[GEOFENCE] 1 geofence(s) loaded
 ```
 
 ---
@@ -267,130 +229,127 @@ Geofence violation logged to Firebase
 ## Testing the Feature
 
 ### Test 1: Create a Geofence
-1. Open app → Geofences tab → Tap +
-2. Enter zone name: "Test Home"
-3. Enter latitude: 40.7128
-4. Enter longitude: -74.0060
-5. Set radius: 500m
-6. Tap "Create"
-7. Check serial monitor: Should log "Fetched 1 geofences"
+1. Open app → Geofences tab → Tap **Add Polygon**
+2. Tap the map to place 3+ vertices around your location
+3. Enter a name: "Test Home"
+4. Tap **Save Polygon**
+5. Check serial monitor: should log `[GEOFENCE] 1 geofence(s) loaded`
 
-### Test 2: Verify Coordinates
-1. Check the geofence card displays the coordinates correctly
-2. Verify coordinates are shown to 6 decimal places
-3. Visit https://maps.google.com and paste coordinates to verify location
+### Test 2: Verify the Polygon
+1. Check the geofence card shows the correct vertex count
+2. Verify the polygon renders on the map with the correct shape
+3. Tap the zone to edit and confirm the vertices match where you tapped
 
 ### Test 3: GPS Tracking
-1. Enable GPS on your device
-2. Check serial monitor outputs GPS coordinates
-3. Move device around and watch serial output update
-4. Verify GPS coordinates match actual location
+1. Ensure the device is outdoors with sky view
+2. Check serial monitor outputs GPS fixes
+3. Move the device around and watch the location update
 
 ### Test 4: Violation Detection
-1. Create a geofence around a known location with coordinates
-2. Move the device ~100m away from the geofence center
+1. Draw a polygon around a known location
+2. Move the device clearly outside the polygon (with a GPS fix)
 3. Check:
-   - Serial monitor shows "exited" message
+   - Serial monitor shows `[GEOFENCE] '<name>' exited`
    - App's Alert History shows the violation
-   - ESP32 RTDB shows log under `/devices/{deviceId}/geofence_violations/`
-4. Move back within the zone
-5. Serial monitor should show "entered" message
+   - ESP32 RTDB shows the log under `/devices/{deviceId}/geofence_violations/`
+4. Move back inside the polygon
+5. Serial monitor should show `[GEOFENCE] '<name>' entered`
 
 ### Test 5: Multiple Geofences
-1. Create 3-4 geofences in different cities (use real world coordinates)
-2. Simulate movement between zones by simulating GPS changes
-3. Verify each triggers correct violation type (entered/exited)
-4. Check that disabled zones don't trigger violations
+1. Create 3-4 polygons in different areas
+2. Move between them (with valid GPS)
+3. Verify each triggers the correct violation type (entered/exited)
+4. Check that disabled zones are not synced and don't trigger violations
 
 ---
 
 ## Troubleshooting
 
-### "Invalid Coordinates" Error
-**Problem**: App shows "Invalid coordinates. Lat: -90 to 90, Lng: -180 to 180"
+### "Invalid Polygon" / Can't Save
+**Problem**: The Save button is disabled.
 
 **Solution**:
-- Latitude must be between -90 and 90
-- Longitude must be between -180 and 180
-- Use decimal format (e.g., 40.7128, not "40°42'52.5"N")
-- Check you didn't swap latitude and longitude
+- A polygon needs **at least 3 vertices** — tap the map at least 3 times
+- Enter a name in the "Polygon Name" field
+- Use the map, not a lat/lng form; there is no manual coordinate entry in v2
 
 ### "No GPS Fix" Issue
-**Problem**: [GEOFENCE] Waiting for GPS fix...
+**Problem**: Geofences never trigger; no `[GEOFENCE] ... entered/exited` lines.
 
 **Solution**:
 - Move device outdoors (GPS needs line-of-sight to satellites)
-- Wait 2-3 minutes for first fix
-- Check GPS module wiring on ESP32
-- Verify NEO-6M module is powered (5V)
+- Wait 5-10 minutes for the first fix
+- Check GPS module wiring on the ESP32 (GT-U8 TX → GPIO 5, RX → GPIO 6)
+- Verify GT-U8 module is powered (3.3V)
 - Try moving away from buildings/trees
 
 ### Geofences Not Syncing
-**Problem**: Geofence created in app but not appearing on device
+**Problem**: Geofence created in app but not appearing on device.
 
 **Solution**:
-- Check Firebase connection: Look for "Firebase connected" in serial monitor
-- Verify device has internet connectivity
-- Check DEVICE_ID matches in app and firmware
-- Verify Firestore geofence exists: 
-  - Go to Firebase Console → Collections → Users → Your ID → geofences
-  - Check geofence document has correct structure
+- Check serial monitor for `[GEOFENCE] N geofence(s) loaded`
+- Verify the device has internet connectivity
+- The device ID is auto-generated (`guardian_<mac>`); the app learns it over BLE — confirm the app is bound to the correct device
+- Verify the geofence exists in Firestore: Firebase Console → Collections → Users → Your ID → geofences
+- Confirm the geofence is **enabled** (disabled zones are not synced)
+- Check that the polygon has ≥3 vertices
 
 ### False Violations
-**Problem**: Getting too many "entered" and "exited" messages
+**Problem**: Getting too many "entered"/"exited" messages at a boundary.
 
 **Solution**:
-- GPS accuracy is typically ±20-50m, causing false boundary crossings
-- Increase geofence radius (try 500m+ instead of 100m)
-- Increase CHECK_INTERVAL_MS to 60000 (check less frequently)
-- Edit line in `guardian_firmware.ino`:
-  ```cpp
-  #define GEOFENCE_CHECK_INTERVAL_MS 60000  // Check every 60 seconds
-  ```
+- GPS accuracy is typically ±20-50 m, causing jitter near the polygon edge
+- The firmware already requires 2 consecutive confirming fixes (`GEOFENCE_CONFIRM_FIXES`) — increase it to 3 in section 1 of `guardian_firmware.ino` for stricter filtering
+- Draw larger polygons to reduce boundary crossings
+- Avoid placing the polygon edge right on top of a frequently-occupied location
 
 ### Distance Calculation Seems Wrong
-**Problem**: Device shows 1000m away but looks closer, or vice versa
+**Problem**: Reported `distance` looks off.
 
 **Solution**:
-- Double-check coordinates are correct (use maps.google.com to verify)
-- GPS accuracy varies by environment (±20-50m is normal)
-- Satellite geometry affects accuracy (fewer satellites = less accurate)
-- Move to open area away from buildings for better accuracy
-- The Haversine formula is accurate for distances up to 20km
+- `distance` is measured to the polygon **centroid** (average of the vertices), so a large polygon will report a larger distance even when the device is inside it — this is expected
+- GPS accuracy varies by environment (±20-50 m is normal)
+- Move to an open area for better accuracy
 
 ### Firebase Write Errors
-**Problem**: "Failed to log violation: Permission denied"
+**Problem**: "Failed to log violation: Permission denied".
 
 **Solution**:
 - Update Firebase Realtime Database rules (see configuration above)
-- Ensure FIREBASE_AUTH token is valid
-- Check device path is under `/devices/{DEVICE_ID}`
-- Verify geofence exists in Firestore before violations are created
+- Ensure `FIREBASE_AUTH` in `secrets.h` is valid (and rotate it if it was ever committed)
+- Check the device path is under `/devices/{deviceId}`
 
 ---
 
 ## Advanced Configuration
 
-### Adjust Check Interval
-Edit in `guardian_firmware.ino`:
+All tunables live in **section 1** of `guardian_firmware.ino`:
+
+### Geofence Confirmation
 ```cpp
-#define GEOFENCE_CHECK_INTERVAL_MS 30000  // 30 seconds (default)
-#define GEOFENCE_CHECK_INTERVAL_MS 60000  // 60 seconds (less frequent)
-#define GEOFENCE_CHECK_INTERVAL_MS 10000  // 10 seconds (more frequent)
+constexpr uint8_t  GEOFENCE_CONFIRM_FIXES = 2;      // consecutive fixes needed to log enter/exit
+constexpr uint32_t GEOFENCE_CONFIRM_GAP_MS = 5000;  // wait between confirming fixes
+```
+Raise `GEOFENCE_CONFIRM_FIXES` to reduce false violations (at the cost of slower detection).
+
+### Refresh Interval
+```cpp
+constexpr uint32_t GEOFENCE_REFRESH_MS = 600000;  // re-download geofences every 10 min
 ```
 
-### Increase Max Geofences
-Edit in `guardian_firmware.ino`:
+### Max Geofences / Vertices
 ```cpp
-#define MAX_GEOFENCES 10   // Default
-#define MAX_GEOFENCES 20   // Support more zones
+constexpr int MAX_GEOFENCES = 10;
+constexpr int MAX_VERTICES  = 20;
 ```
+Raise `MAX_GEOFENCES` to support more zones, or `MAX_VERTICES` for more detailed polygons.
 
-### Adjust Haversine Precision
-The distance calculation uses:
-- Earth radius: 6,371,000 meters
-- Formula: Accurate to ±0.5% for distances up to 20km
-- Good enough for geofencing use case
+### GPS Duty Cycle (when geofences are active)
+```cpp
+constexpr uint32_t GPS_ACTIVE_INTERVAL_MS = 60000;    // 1 min between checks when geofences exist
+constexpr uint32_t GPS_ACTIVE_NOFENCE_MS = 300000;    // 5 min when no geofences
+```
+There is no `GEOFENCE_CHECK_INTERVAL_MS` in v2 — the cadence is driven by the GPS duty cycle, and evaluation runs on every valid fix.
 
 ---
 
@@ -400,10 +359,9 @@ The distance calculation uses:
 ```
 users/{userId}
   └─ geofences/{geofenceId}
+     ├─ userId: string
      ├─ name: string
-     ├─ latitude: number
-     ├─ longitude: number
-     ├─ radiusMeters: number
+     ├─ vertices: array<{lat: number, lng: number}>   (≥ 3 vertices)
      ├─ enabled: boolean
      ├─ createdAt: timestamp
      └─ updatedAt: timestamp
@@ -413,33 +371,30 @@ users/{userId}
      ├─ geofenceId: string
      ├─ name: string
      ├─ type: "entered" | "exited"
-     ├─ latitude: number
-     ├─ longitude: number
-     ├─ distance: number (meters)
+     ├─ lat: number
+     ├─ lng: number
+     ├─ distance: number (meters to centroid)
+     ├─ eventUtc: number
      └─ timestamp: timestamp
 ```
 
 ### Realtime Database
 ```
 devices/{deviceId}
-  └─ geofences/ (array)
-     └─ GEO_RECORD
-        ├─ id: string
-        ├─ name: string
-        ├─ lat: number
-        ├─ lng: number
-        └─ radius: number
+  └─ geofences/            (array written by the app)
+     └─ [ { id, name, vertices: [ {lat, lng}, ... ] }, ... ]
 
 devices/{deviceId}
   └─ geofence_violations/
-     └─ {timestamp}
+     └─ {pushId}
         ├─ geofenceId: string
         ├─ name: string
-        ├─ type: string
+        ├─ type: "entered" | "exited"
         ├─ lat: number
         ├─ lng: number
         ├─ distance: number
-        └─ timestamp: number
+        ├─ eventUtc: number
+        └─ timestamp: number (server timestamp)
 ```
 
 ---
@@ -447,27 +402,26 @@ devices/{deviceId}
 ## Future Enhancements
 
 - [ ] **Location Picker**: Tap to select from recent locations
-- [ ] **Address Search**: Search by address name instead of coordinates
-- [ ] **Polygon Geofences**: Define complex boundaries instead of just circles
-- [ ] **Push Notifications**: Send device notifications on geofence violations
+- [ ] **Address Search**: Search by address name instead of drawing manually
+- [ ] **Circle Zones**: Optional circle (center + radius) mode in addition to polygons
+- [ ] **Push Notifications**: Send device notifications on geofence violations (already wired via Cloud Functions)
 - [ ] **Exit Alert Timeout**: Alert guardians after device is outside for X minutes
-- [ ] **Scheduled Zones**: Zones that only active during certain times
+- [ ] **Scheduled Zones**: Zones that are only active during certain times
 - [ ] **Geofence Groups**: Combine multiple zones (e.g., "Safe Zones")
 - [ ] **Smart Notifications**: Reduce redundant notifications with smart filtering
-- [ ] **Map View** (Optional): Add optional map with free service like OpenStreetMap
 
 ---
 
 ## Support & Debugging
 
 For detailed logs, check:
-1. **Serial Monitor** (Arduino IDE): Real-time firmware logs
+1. **Serial Monitor** (Arduino IDE): Real-time firmware logs (`[GEOFENCE]`, `[CMD]`, `[STATUS]`)
 2. **Firebase Console**: Geofence data and violations
 3. **App Alerts Screen**: Historical violations logged to app
 4. **Flutter DevTools**: Network requests to Firestore
 
 ---
 
-**Version**: 1.0  
-**Last Updated**: April 15, 2026  
-**Status**: Fully Implemented & Tested
+**Version**: 2.0.0
+**Last Updated**: October 12, 2026
+**Status**: Polygon-based, event-driven geofencing

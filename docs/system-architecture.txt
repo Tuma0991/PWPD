@@ -81,7 +81,7 @@ ESP32 Device ──── Sensor data (2s), emergencies ────► Firebase
 
 | Concern | Handled By |
 |---------|-----------|
-| Sensing movement & location | ESP32 (MPU6050 + NEO-6M GPS) |
+| Sensing movement & location | ESP32 (MPU6050 + GT-U8 GPS) |
 | Detecting falls | ESP32 (on-device, < 2.5g threshold) |
 | Real-time data sync | Firebase Realtime Database |
 | Persistent storage | Firebase Cloud Firestore |
