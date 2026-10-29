@@ -116,7 +116,8 @@ class _DeviceSetupScreenState extends State<DeviceSetupScreen> {
         if (await Permission.location.status.isDenied) {
           if (mounted) {
             setState(() {
-              _errorMessage = 'Location permission is required for BLE scanning.';
+              _errorMessage =
+                  'Location permission is required for BLE scanning.';
             });
           }
           return false;
@@ -250,14 +251,8 @@ class _DeviceSetupScreenState extends State<DeviceSetupScreen> {
         });
       }
 
-      await _deviceConfig.saveDeviceConfig(
-        deviceId: result.deviceId,
-        deviceName: result.deviceName,
-      );
-
-      try {
-        await _firebase.updateUserDeviceId(result.deviceId);
-      } catch (_) {}
+      await _firebase.addDevice(result.deviceId, deviceName: result.deviceName);
+      await _deviceConfig.setActiveDeviceId(result.deviceId);
 
       setState(() => _step = SetupStep.success);
     } catch (e) {
@@ -318,7 +313,7 @@ class _DeviceSetupScreenState extends State<DeviceSetupScreen> {
     final services = r.advertisementData.serviceUuids;
     final guardianUuid = Guid(BleProvisioningService.serviceUuid);
     return (name.isNotEmpty && name.contains('Guardian_')) ||
-           services.any((u) => u == guardianUuid);
+        services.any((u) => u == guardianUuid);
   }
 
   // ─── Scan View ──────────────────────────────────────────────────────────
@@ -359,7 +354,8 @@ class _DeviceSetupScreenState extends State<DeviceSetupScreen> {
                           strokeWidth: 3,
                         ),
                       )
-                    : const Icon(Icons.bluetooth, color: Colors.white, size: 28),
+                    : const Icon(Icons.bluetooth,
+                        color: Colors.white, size: 28),
               ),
               const SizedBox(height: 14),
               const Text(
@@ -471,7 +467,8 @@ class _DeviceSetupScreenState extends State<DeviceSetupScreen> {
                   color: const Color(0xFF1565C0).withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: const Icon(Icons.wifi, color: Color(0xFF1565C0), size: 22),
+                child:
+                    const Icon(Icons.wifi, color: Color(0xFF1565C0), size: 22),
               ),
               const SizedBox(width: 12),
               const Expanded(
@@ -509,7 +506,9 @@ class _DeviceSetupScreenState extends State<DeviceSetupScreen> {
             obscureText: _obscurePass,
             suffixIcon: IconButton(
               icon: Icon(
-                _obscurePass ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                _obscurePass
+                    ? Icons.visibility_off_outlined
+                    : Icons.visibility_outlined,
                 color: const Color(0xFF6B7A99),
                 size: 20,
               ),
@@ -610,7 +609,8 @@ class _DeviceSetupScreenState extends State<DeviceSetupScreen> {
                 color: Color(0xFFE8F5E9),
                 shape: BoxShape.circle,
               ),
-              child: const Icon(Icons.check, color: Color(0xFF43A047), size: 44),
+              child:
+                  const Icon(Icons.check, color: Color(0xFF43A047), size: 44),
             ),
             const SizedBox(height: 24),
             const Text(
@@ -674,7 +674,8 @@ class _DeviceSetupScreenState extends State<DeviceSetupScreen> {
                 color: Color(0xFFFFEBEE),
                 shape: BoxShape.circle,
               ),
-              child: const Icon(Icons.error_outline, color: Color(0xFFE53935), size: 44),
+              child: const Icon(Icons.error_outline,
+                  color: Color(0xFFE53935), size: 44),
             ),
             const SizedBox(height: 24),
             const Text(
@@ -762,7 +763,9 @@ class _DeviceCard extends StatelessWidget {
                   ),
                   child: Icon(
                     isGuardian ? Icons.shield : Icons.bluetooth,
-                    color: isGuardian ? const Color(0xFF1565C0) : const Color(0xFF6B7A99),
+                    color: isGuardian
+                        ? const Color(0xFF1565C0)
+                        : const Color(0xFF6B7A99),
                     size: 22,
                   ),
                 ),
@@ -836,7 +839,8 @@ class _DeviceCard extends StatelessWidget {
                   }),
                 ),
                 const SizedBox(width: 8),
-                const Icon(Icons.chevron_right, color: Color(0xFF9EA8C2), size: 20),
+                const Icon(Icons.chevron_right,
+                    color: Color(0xFF9EA8C2), size: 20),
               ],
             ),
           ),
@@ -888,7 +892,8 @@ class _SetupTextField extends StatelessWidget {
           borderRadius: BorderRadius.circular(14),
           borderSide: const BorderSide(color: Color(0xFF1565C0), width: 2),
         ),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       ),
     );
   }
@@ -916,7 +921,8 @@ class _GuardianSetupButton extends StatelessWidget {
           backgroundColor: const Color(0xFF1565C0),
           foregroundColor: Colors.white,
           elevation: 0,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         ),
         child: loading
             ? const SizedBox(
@@ -951,7 +957,8 @@ class _ErrorBanner extends StatelessWidget {
       decoration: BoxDecoration(
         color: const Color(0xFFFFEBEE),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFE53935).withValues(alpha: 0.3)),
+        border:
+            Border.all(color: const Color(0xFFE53935).withValues(alpha: 0.3)),
       ),
       child: Row(
         children: [

@@ -49,14 +49,11 @@ Future<void> main() async {
   // but FCM foreground handler is the safety net when the user is on another tab)
   FirebaseMessaging.onMessage.listen(_onForegroundMessage);
 
-  // FCM token refresh — re-register with the current device
-  messaging.onTokenRefresh.listen((newToken) {
+  // FCM token refresh — re-register across all paired devices
+  messaging.onTokenRefresh.listen((_) {
     final firebase = FirebaseService();
-    final userId = firebase.currentUser?.uid;
-    if (userId != null) {
-      // Re-register will happen next time HomeScreen loads device config.
-      // For immediate re-registration, we'd need the deviceId — defer to
-      // the HomeScreen's existing registerFcmToken call.
+    if (firebase.currentUser != null) {
+      firebase.registerFcmTokenForAllDevices();
     }
   });
 

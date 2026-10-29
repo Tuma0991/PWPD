@@ -1,39 +1,48 @@
 import 'package:shared_preferences/shared_preferences.dart';
 
+/// Stores the user's active device selection locally.
+///
+/// The list of paired devices lives in Firestore (`users/{uid}/devices`); this
+/// service only remembers which one the UI is currently showing. Legacy
+/// single-device keys are kept solely for a one-time migration on upgrade.
 class DeviceConfigService {
-  static const _keyDeviceId = 'configured_device_id';
-  static const _keyDeviceName = 'configured_device_name';
-  static const _keyLastConfigured = 'last_configured_timestamp';
+  static const _keyActiveDeviceId = 'active_device_id';
+  static const _keyLegacyDeviceId = 'configured_device_id';
+  static const _keyLegacyDeviceName = 'configured_device_name';
+  static const _keyLegacyLastConfigured = 'last_configured_timestamp';
 
-  Future<String?> getDeviceId() async {
+  Future<String?> getActiveDeviceId() async {
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getString(_keyDeviceId);
+    return prefs.getString(_keyActiveDeviceId);
   }
 
-  Future<String?> getDeviceName() async {
+  Future<void> setActiveDeviceId(String deviceId) async {
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getString(_keyDeviceName);
+    await prefs.setString(_keyActiveDeviceId, deviceId);
   }
 
-  Future<void> saveDeviceConfig({
-    required String deviceId,
-    required String deviceName,
-  }) async {
+  Future<void> clearActiveDeviceId() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_keyDeviceId, deviceId);
-    await prefs.setString(_keyDeviceName, deviceName);
-    await prefs.setInt(_keyLastConfigured, DateTime.now().millisecondsSinceEpoch);
+    await prefs.remove(_keyActiveDeviceId);
   }
 
-  Future<void> clearDeviceConfig() async {
+  /// One-time backfill for installs that predate multi-device support: if no
+  /// active device is set but the old single-device keys exist, return them and
+  /// clear the legacy keys so the migration only runs once.
+  Future<({String deviceId, String deviceName})?> migrateLegacyDevice() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_keyDeviceId);
-    await prefs.remove(_keyDeviceName);
-    await prefs.remove(_keyLastConfigured);
-  }
 
-  Future<bool> get isDeviceConfigured async {
-    final id = await getDeviceId();
-    return id != null && id.isNotEmpty;
+    final active = prefs.getString(_keyActiveDeviceId);
+    if (active != null && active.isNotEmpty) return null;
+
+    final id = prefs.getString(_keyLegacyDeviceId);
+    if (id == null || id.isEmpty) return null;
+
+    final name = prefs.getString(_keyLegacyDeviceName) ?? '';
+    await prefs.remove(_keyLegacyDeviceId);
+    await prefs.remove(_keyLegacyDeviceName);
+    await prefs.remove(_keyLegacyLastConfigured);
+
+    return (deviceId: id, deviceName: name);
   }
 }

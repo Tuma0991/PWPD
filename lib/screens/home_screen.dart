@@ -8,15 +8,19 @@ import '../services/device_config_service.dart';
 import '../services/language_service.dart';
 import '../services/alert_sound_service.dart';
 import '../models/device_data.dart';
+import '../models/paired_device.dart';
 import '../widgets/toast_notification.dart';
-import '../main.dart' show consumePendingInitialMessage, setNotificationTapHandler;
+import '../main.dart'
+    show consumePendingInitialMessage, setNotificationTapHandler;
 import 'map_screen.dart';
 import 'fall_detection_screen.dart';
 import 'alerts_screen.dart';
 import 'contacts_screen.dart';
 import 'device_setup_screen.dart';
+import 'devices_screen.dart';
 import 'device_settings_screen.dart';
 import 'alert_sound_screen.dart';
+import 'account_settings_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -28,13 +32,16 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   int _currentIndex = 0;
 
-  String? _deviceId;
-  String? _lastRegisteredDeviceId;
+  List<PairedDevice> _devices = [];
+  String? _activeDeviceId;
+  String? _userId;
   bool _isConfigured = false;
   bool _isLoading = true;
+  bool _fcmRegistered = false;
   final _deviceConfig = DeviceConfigService();
   final _firebase = FirebaseService();
   StreamSubscription? _authSub;
+  StreamSubscription<List<PairedDevice>>? _devicesSub;
 
   // ─── Emergency dialog (shown once per emergency) ───────────────────────────
   StreamSubscription<Map<String, dynamic>>? _emergencySub;
@@ -59,7 +66,8 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
-    _loadDeviceConfig();
+    _userId = _firebase.currentUser?.uid;
+    _loadDevices();
 
     // Register this phone for push notifications when the deviceId changes
     setNotificationTapHandler((index) {
@@ -73,11 +81,15 @@ class _HomeScreenState extends State<HomeScreen> {
       consumePendingInitialMessage();
     });
 
-    // Clean up FCM token on logout
+    // Clean up FCM tokens on logout (currentUser is already null here, so
+    // remove against the uid + device ids captured while signed in).
     _authSub = _firebase.authStateChanges.listen((user) {
-      if (user == null && _lastRegisteredDeviceId != null) {
-        _firebase.removeFcmToken(_lastRegisteredDeviceId!);
-        _lastRegisteredDeviceId = null;
+      if (user == null && _userId != null) {
+        _firebase.removeFcmTokensForDevices(
+          _userId!,
+          _devices.map((d) => d.deviceId).toList(),
+        );
+        _userId = null;
       }
     });
   }
@@ -86,29 +98,67 @@ class _HomeScreenState extends State<HomeScreen> {
   void dispose() {
     setNotificationTapHandler(null);
     _authSub?.cancel();
+    _devicesSub?.cancel();
     _emergencySub?.cancel();
     _recenterRequest.dispose();
     _alertPlayer.dispose();
     super.dispose();
   }
 
-  Future<void> _loadDeviceConfig() async {
-    final deviceId = await _deviceConfig.getDeviceId();
-    if (mounted) {
-      setState(() {
-        _deviceId = deviceId;
-        _isConfigured = deviceId != null && deviceId.isNotEmpty;
-        _isLoading = false;
-      });
-    }
-    // Register as device owner + FCM token so Cloud Function can send
-    // push notifications. Clears any previous owner's FCM tokens.
-    if (deviceId != null && deviceId.isNotEmpty && deviceId != _lastRegisteredDeviceId) {
-      _lastRegisteredDeviceId = deviceId;
-      _firebase.setDeviceOwner(deviceId);
-    }
+  Future<void> _loadDevices() async {
+    final legacy = await _deviceConfig.migrateLegacyDevice();
+    String? legacyId = legacy?.deviceId;
 
-    if (mounted) _subscribeToEmergency(deviceId ?? '');
+    _devicesSub?.cancel();
+    _devicesSub = _firebase.listenToDevices().listen((devices) {
+      if (!mounted) return;
+
+      // Backfill a pre-existing single device into Firestore once.
+      final pendingId = legacyId;
+      if (pendingId != null &&
+          pendingId.isNotEmpty &&
+          !devices.any((d) => d.deviceId == pendingId)) {
+        _firebase.addDevice(pendingId, deviceName: legacy?.deviceName ?? '');
+        legacyId = null;
+        return; // the next snapshot will include it
+      }
+
+      _applyDevices(devices);
+
+      if (!_fcmRegistered && devices.isNotEmpty) {
+        _fcmRegistered = true;
+        _firebase.registerFcmTokenForAllDevices();
+      }
+    });
+  }
+
+  Future<void> _applyDevices(List<PairedDevice> devices) async {
+    var activeId = await _deviceConfig.getActiveDeviceId();
+    if (activeId == null ||
+        activeId.isEmpty ||
+        !devices.any((d) => d.deviceId == activeId)) {
+      activeId = devices.isNotEmpty ? devices.first.deviceId : null;
+      if (activeId != null) await _deviceConfig.setActiveDeviceId(activeId);
+    }
+    if (!mounted) return;
+    setState(() {
+      _devices = devices;
+      _activeDeviceId = activeId;
+      _isConfigured = devices.isNotEmpty;
+      _isLoading = false;
+    });
+    _subscribeToEmergency(activeId ?? '');
+  }
+
+  /// Re-reads the active device and resubscribes after a sub-screen may have
+  /// switched or added a device (Firestore stream already covers additions).
+  Future<void> _refreshDevices() => _applyDevices(_devices);
+
+  Future<void> _switchDevice(String deviceId) async {
+    if (deviceId == _activeDeviceId) return;
+    await _deviceConfig.setActiveDeviceId(deviceId);
+    _subscribeToEmergency(deviceId);
+    if (mounted) setState(() => _activeDeviceId = deviceId);
   }
 
   // ─── Emergency dialog logic ────────────────────────────────────────────────
@@ -306,8 +356,7 @@ class _HomeScreenState extends State<HomeScreen> {
               foregroundColor: const Color(0xFFE53935),
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(10)),
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
             ),
             child: const Text(
               'Mark as Safe',
@@ -324,26 +373,31 @@ class _HomeScreenState extends State<HomeScreen> {
       context,
       MaterialPageRoute(builder: (_) => const DeviceSetupScreen()),
     );
-    _loadDeviceConfig();
+    _refreshDevices();
   }
 
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
       return const Scaffold(
-        body: Center(child: CircularProgressIndicator(color: Color(0xFF1565C0))),
+        body:
+            Center(child: CircularProgressIndicator(color: Color(0xFF1565C0))),
       );
     }
 
     final firebase = FirebaseService();
     final userId = firebase.currentUser?.uid ?? '';
-    final deviceId = _deviceId ?? '';
+    final deviceId = _activeDeviceId ?? '';
 
     final screens = [
       _DashboardTab(
           deviceId: deviceId,
+          devices: _devices,
+          activeDeviceId: _activeDeviceId,
           isConfigured: _isConfigured,
           onSetup: _openSetup,
+          onSelectDevice: _switchDevice,
+          onDevicesChanged: _refreshDevices,
           isActive: _currentIndex == 0),
       MapScreen(
           userId: userId,
@@ -397,22 +451,22 @@ class _HomeScreenState extends State<HomeScreen> {
                     children: [
                       Expanded(
                         child: _NavItem(
-                        icon: Icons.map_outlined,
-                        activeIcon: Icons.map,
-                        label: 'Map',
-                        index: 1,
-                        currentIndex: _currentIndex,
-                        onTap: (i) => setState(() => _currentIndex = i),
+                          icon: Icons.map_outlined,
+                          activeIcon: Icons.map,
+                          label: 'Map',
+                          index: 1,
+                          currentIndex: _currentIndex,
+                          onTap: (i) => setState(() => _currentIndex = i),
                         ),
                       ),
                       Expanded(
                         child: _NavItem(
-                        icon: Icons.sensors_outlined,
-                        activeIcon: Icons.sensors,
-                        label: 'Movement',
-                        index: 2,
-                        currentIndex: _currentIndex,
-                        onTap: (i) => setState(() => _currentIndex = i),
+                          icon: Icons.sensors_outlined,
+                          activeIcon: Icons.sensors,
+                          label: 'Movement',
+                          index: 2,
+                          currentIndex: _currentIndex,
+                          onTap: (i) => setState(() => _currentIndex = i),
                         ),
                       ),
                     ],
@@ -437,22 +491,22 @@ class _HomeScreenState extends State<HomeScreen> {
                     children: [
                       Expanded(
                         child: _NavItem(
-                        icon: Icons.notifications_outlined,
-                        activeIcon: Icons.notifications,
-                        label: 'Alerts',
-                        index: 3,
-                        currentIndex: _currentIndex,
-                        onTap: (i) => setState(() => _currentIndex = i),
+                          icon: Icons.notifications_outlined,
+                          activeIcon: Icons.notifications,
+                          label: 'Alerts',
+                          index: 3,
+                          currentIndex: _currentIndex,
+                          onTap: (i) => setState(() => _currentIndex = i),
                         ),
                       ),
                       Expanded(
                         child: _NavItem(
-                        icon: Icons.contacts_outlined,
-                        activeIcon: Icons.contacts,
-                        label: 'Contacts',
-                        index: 4,
-                        currentIndex: _currentIndex,
-                        onTap: (i) => setState(() => _currentIndex = i),
+                          icon: Icons.contacts_outlined,
+                          activeIcon: Icons.contacts,
+                          label: 'Contacts',
+                          index: 4,
+                          currentIndex: _currentIndex,
+                          onTap: (i) => setState(() => _currentIndex = i),
                         ),
                       ),
                     ],
@@ -580,9 +634,8 @@ class _NavItem extends StatelessWidget {
             Icon(
               isActive ? activeIcon : icon,
               size: 22,
-              color: isActive
-                  ? const Color(0xFF1565C0)
-                  : const Color(0xFF9EA8C2),
+              color:
+                  isActive ? const Color(0xFF1565C0) : const Color(0xFF9EA8C2),
             ),
             const SizedBox(height: 3),
             FittedBox(
@@ -610,13 +663,21 @@ class _NavItem extends StatelessWidget {
 
 class _DashboardTab extends StatefulWidget {
   final String deviceId;
+  final List<PairedDevice> devices;
+  final String? activeDeviceId;
   final bool isConfigured;
   final VoidCallback onSetup;
+  final ValueChanged<String> onSelectDevice;
+  final VoidCallback onDevicesChanged;
   final bool isActive;
   const _DashboardTab({
     required this.deviceId,
+    required this.devices,
+    required this.activeDeviceId,
     required this.isConfigured,
     required this.onSetup,
+    required this.onSelectDevice,
+    required this.onDevicesChanged,
     this.isActive = true,
   });
 
@@ -624,8 +685,7 @@ class _DashboardTab extends StatefulWidget {
   State<_DashboardTab> createState() => _DashboardTabState();
 }
 
-class _DashboardTabState extends State<_DashboardTab>
-    with OfflineToastMixin {
+class _DashboardTabState extends State<_DashboardTab> with OfflineToastMixin {
   Timer? _refreshTimer;
   DeviceData? _latestData;
 
@@ -642,6 +702,95 @@ class _DashboardTabState extends State<_DashboardTab>
     _refreshTimer?.cancel();
     disposeOfflineToast();
     super.dispose();
+  }
+
+  Widget _buildDeviceSwitcher(BuildContext context) {
+    final active = widget.devices.firstWhere(
+      (d) => d.deviceId == widget.activeDeviceId,
+      orElse: () => widget.devices.first,
+    );
+    return PopupMenuButton<String>(
+      tooltip: 'Switch device',
+      onSelected: (value) {
+        if (value == '__manage__') {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const DevicesScreen()),
+          ).then((_) => widget.onDevicesChanged());
+        } else {
+          widget.onSelectDevice(value);
+        }
+      },
+      itemBuilder: (context) => [
+        for (final d in widget.devices)
+          PopupMenuItem(
+            value: d.deviceId,
+            child: Row(
+              children: [
+                Icon(
+                  d.deviceId == widget.activeDeviceId
+                      ? Icons.check_circle
+                      : Icons.circle_outlined,
+                  size: 18,
+                  color: d.deviceId == widget.activeDeviceId
+                      ? const Color(0xFF1565C0)
+                      : const Color(0xFF9EA8C2),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    d.displayName,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        const PopupMenuDivider(),
+        const PopupMenuItem(
+          value: '__manage__',
+          child: Row(
+            children: [
+              Icon(Icons.devices, size: 18, color: Color(0xFF1565C0)),
+              SizedBox(width: 10),
+              Text('Manage devices',
+                  style: TextStyle(fontWeight: FontWeight.w600)),
+            ],
+          ),
+        ),
+      ],
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        margin: const EdgeInsets.only(right: 4),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.18),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.3)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.watch, color: Colors.white, size: 16),
+            const SizedBox(width: 6),
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 110),
+              child: Text(
+                active.displayName,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 13,
+                ),
+              ),
+            ),
+            const SizedBox(width: 4),
+            const Icon(Icons.arrow_drop_down, color: Colors.white, size: 18),
+          ],
+        ),
+      ),
+    );
   }
 
   @override
@@ -680,11 +829,13 @@ class _DashboardTabState extends State<_DashboardTab>
           ],
         ),
         actions: [
+          if (widget.devices.isNotEmpty) _buildDeviceSwitcher(context),
           PopupMenuButton<String>(
             icon: const Icon(Icons.more_vert, color: Colors.white),
             tooltip: 'More',
             color: Colors.white,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
             onSelected: (value) async {
               if (value == 'settings') {
                 Navigator.push(
@@ -693,6 +844,7 @@ class _DashboardTabState extends State<_DashboardTab>
                     builder: (_) => _SettingsScreen(
                       userId: firebase.currentUser?.uid ?? '',
                       deviceId: widget.deviceId,
+                      onDevicesChanged: widget.onDevicesChanged,
                     ),
                   ),
                 );
@@ -702,7 +854,8 @@ class _DashboardTabState extends State<_DashboardTab>
                 final shouldLogout = await showDialog<bool>(
                   context: context,
                   builder: (context) => AlertDialog(
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(20)),
                     title: const Text('Log out',
                         style: TextStyle(fontWeight: FontWeight.w800)),
                     content: const Text('Are you sure you want to log out?'),
@@ -747,7 +900,8 @@ class _DashboardTabState extends State<_DashboardTab>
               PopupMenuItem(
                 value: 'settings',
                 child: Row(children: [
-                  Icon(Icons.settings_outlined, size: 20, color: Color(0xFF1565C0)),
+                  Icon(Icons.settings_outlined,
+                      size: 20, color: Color(0xFF1565C0)),
                   SizedBox(width: 12),
                   Text('Settings'),
                 ]),
@@ -764,7 +918,8 @@ class _DashboardTabState extends State<_DashboardTab>
               PopupMenuItem(
                 value: 'logout',
                 child: Row(children: [
-                  Icon(Icons.logout_outlined, size: 20, color: Color(0xFFE53935)),
+                  Icon(Icons.logout_outlined,
+                      size: 20, color: Color(0xFFE53935)),
                   SizedBox(width: 12),
                   Text('Log out', style: TextStyle(color: Color(0xFFE53935))),
                 ]),
@@ -839,7 +994,8 @@ class _DashboardTabState extends State<_DashboardTab>
                     decoration: BoxDecoration(
                       color: const Color(0xFFFFF3E0),
                       borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: Colors.orange.withValues(alpha: 0.3)),
+                      border: Border.all(
+                          color: Colors.orange.withValues(alpha: 0.3)),
                     ),
                     child: Row(
                       children: [
@@ -856,10 +1012,10 @@ class _DashboardTabState extends State<_DashboardTab>
                                       fontSize: 13,
                                       color: Color(0xFFE65100))),
                               SizedBox(height: 2),
-                              Text('Tap to set up your Guardian wearable via Bluetooth',
+                              Text(
+                                  'Tap to set up your Guardian wearable via Bluetooth',
                                   style: TextStyle(
-                                      fontSize: 12,
-                                      color: Color(0xFF6B7A99))),
+                                      fontSize: 12, color: Color(0xFF6B7A99))),
                             ],
                           ),
                         ),
@@ -979,16 +1135,21 @@ class _DashboardTabState extends State<_DashboardTab>
                       // The one-time alert dialog lives in HomeScreen; this
                       // banner stays until the emergency is marked safe.
                       StreamBuilder<Map<String, dynamic>>(
-                        stream: firebase.listenToEmergencyAlert(widget.deviceId),
+                        stream:
+                            firebase.listenToEmergencyAlert(widget.deviceId),
                         builder: (context, snap) {
                           final emergencyData = snap.data ?? {};
-                          final isEmergencyActive = emergencyData['active'] == true;
+                          final isEmergencyActive =
+                              emergencyData['active'] == true;
                           final emergencyReason =
                               emergencyData['reason'] as String? ?? '';
-                          final isSOSButton = emergencyReason.contains('SOS button');
+                          final isSOSButton =
+                              emergencyReason.contains('SOS button');
                           final isFall = emergencyReason.contains('Fall');
 
-                          if (!isEmergencyActive) return const SizedBox.shrink();
+                          if (!isEmergencyActive) {
+                            return const SizedBox.shrink();
+                          }
 
                           return Container(
                             margin: const EdgeInsets.only(bottom: 20),
@@ -998,7 +1159,8 @@ class _DashboardTabState extends State<_DashboardTab>
                               borderRadius: BorderRadius.circular(18),
                               boxShadow: [
                                 BoxShadow(
-                                  color: const Color(0xFFE53935).withValues(alpha: 0.35),
+                                  color: const Color(0xFFE53935)
+                                      .withValues(alpha: 0.35),
                                   blurRadius: 16,
                                   offset: const Offset(0, 6),
                                 ),
@@ -1023,7 +1185,8 @@ class _DashboardTabState extends State<_DashboardTab>
                                 const SizedBox(width: 14),
                                 Expanded(
                                   child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
                                       Text(
                                         isSOSButton
@@ -1046,7 +1209,8 @@ class _DashboardTabState extends State<_DashboardTab>
                                                 ? 'Fall event detected!'
                                                 : 'Emergency alert triggered!',
                                         style: const TextStyle(
-                                            color: Colors.white70, fontSize: 12),
+                                            color: Colors.white70,
+                                            fontSize: 12),
                                       ),
                                     ],
                                   ),
@@ -1058,7 +1222,8 @@ class _DashboardTabState extends State<_DashboardTab>
                                     backgroundColor: Colors.white,
                                     foregroundColor: const Color(0xFFE53935),
                                     shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(10)),
+                                        borderRadius:
+                                            BorderRadius.circular(10)),
                                     padding: const EdgeInsets.symmetric(
                                         horizontal: 12, vertical: 8),
                                   ),
@@ -1158,7 +1323,8 @@ class _DashboardTabState extends State<_DashboardTab>
                       const _InfoTile(
                         icon: Icons.sensors,
                         title: 'Fall Detection',
-                        subtitle: 'A sensor monitors movement patterns to detect falls in real-time',
+                        subtitle:
+                            'A sensor monitors movement patterns to detect falls in real-time',
                         color: Color(0xFF1565C0),
                       ),
                       const SizedBox(height: 8),
@@ -1243,7 +1409,9 @@ class _StatusCard extends StatelessWidget {
                 width: 8,
                 height: 8,
                 decoration: BoxDecoration(
-                  color: isActive ? const Color(0xFF43A047) : const Color(0xFF9EA8C2),
+                  color: isActive
+                      ? const Color(0xFF43A047)
+                      : const Color(0xFF9EA8C2),
                   shape: BoxShape.circle,
                 ),
               ),
@@ -1357,8 +1525,7 @@ void _showAboutDialog(BuildContext context) {
         children: [
           Icon(Icons.shield, color: Color(0xFF1565C0)),
           SizedBox(width: 8),
-          Text('GuardianNako',
-              style: TextStyle(fontWeight: FontWeight.w800)),
+          Text('GuardianNako', style: TextStyle(fontWeight: FontWeight.w800)),
         ],
       ),
       content: const Text(
@@ -1382,7 +1549,12 @@ void _showAboutDialog(BuildContext context) {
 class _SettingsScreen extends StatelessWidget {
   final String userId;
   final String deviceId;
-  const _SettingsScreen({required this.userId, required this.deviceId});
+  final VoidCallback onDevicesChanged;
+  const _SettingsScreen({
+    required this.userId,
+    required this.deviceId,
+    required this.onDevicesChanged,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -1405,8 +1577,31 @@ class _SettingsScreen extends StatelessWidget {
               borderRadius: BorderRadius.circular(14),
             ),
             child: ListTile(
-              leading: const Icon(Icons.settings_outlined,
+              leading: const Icon(Icons.account_circle_outlined,
                   color: Color(0xFF1565C0)),
+              title: const Text('Account',
+                  style: TextStyle(fontWeight: FontWeight.w700)),
+              subtitle: const Text('Name, email and password'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const AccountSettingsScreen(),
+                  ),
+                );
+              },
+            ),
+          ),
+          Container(
+            margin: const EdgeInsets.only(top: 12),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: ListTile(
+              leading:
+                  const Icon(Icons.settings_outlined, color: Color(0xFF1565C0)),
               title: const Text('Device Settings',
                   style: TextStyle(fontWeight: FontWeight.w700)),
               subtitle: const Text('Wearer photo, name and device setup'),
@@ -1421,6 +1616,26 @@ class _SettingsScreen extends StatelessWidget {
                     ),
                   ),
                 );
+              },
+            ),
+          ),
+          Container(
+            margin: const EdgeInsets.only(top: 12),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: ListTile(
+              leading: const Icon(Icons.devices, color: Color(0xFF1565C0)),
+              title: const Text('Devices',
+                  style: TextStyle(fontWeight: FontWeight.w700)),
+              subtitle: const Text('Add, switch or remove paired devices'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const DevicesScreen()),
+                ).then((_) => onDevicesChanged());
               },
             ),
           ),
@@ -1441,8 +1656,7 @@ class _SettingsScreen extends StatelessWidget {
                   subtitle: Text(isTagalog ? 'Filipino' : 'English'),
                   value: isTagalog,
                   activeThumbColor: const Color(0xFF1565C0),
-                  onChanged: (value) =>
-                      LanguageService.isTagalog.value = value,
+                  onChanged: (value) => LanguageService.isTagalog.value = value,
                 ),
               );
             },
@@ -1454,11 +1668,11 @@ class _SettingsScreen extends StatelessWidget {
               borderRadius: BorderRadius.circular(14),
             ),
             child: ListTile(
-              leading: const Icon(Icons.music_note,
-                  color: Color(0xFF1565C0)),
+              leading: const Icon(Icons.music_note, color: Color(0xFF1565C0)),
               title: const Text('Alert sound',
                   style: TextStyle(fontWeight: FontWeight.w700)),
-              subtitle: const Text('Choose the alarm tone for emergency alerts'),
+              subtitle:
+                  const Text('Choose the alarm tone for emergency alerts'),
               trailing: const Icon(Icons.chevron_right),
               onTap: () {
                 Navigator.push(

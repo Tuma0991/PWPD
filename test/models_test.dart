@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:pwpd/models/contact_model.dart';
-import 'package:pwpd/models/device_data.dart';
+import 'package:personal_wearable_protection_device/models/contact_model.dart';
+import 'package:personal_wearable_protection_device/models/device_data.dart';
 
 void main() {
   group('DeviceData', () {
