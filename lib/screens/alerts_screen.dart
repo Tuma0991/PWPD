@@ -222,7 +222,7 @@ class _AlertsScreenState extends State<AlertsScreen> {
                         Container(
                           padding: const EdgeInsets.all(24),
                           decoration: BoxDecoration(
-                            color: const Color(0xFF1565C0).withOpacity(0.08),
+                            color: const Color(0xFF1565C0).withValues(alpha: 0.08),
                             shape: BoxShape.circle,
                           ),
                           child: const Icon(
@@ -401,11 +401,11 @@ class _AlertsScreenState extends State<AlertsScreen> {
                                           borderRadius:
                                               BorderRadius.circular(16),
                                           border: Border.all(
-                                              color: color.withOpacity(0.15),
+                                              color: color.withValues(alpha: 0.15),
                                               width: 1.5),
                                           boxShadow: [
                                             BoxShadow(
-                                              color: color.withOpacity(0.06),
+                                              color: color.withValues(alpha: 0.06),
                                               blurRadius: 10,
                                               offset: const Offset(0, 3),
                                             ),
@@ -416,7 +416,7 @@ class _AlertsScreenState extends State<AlertsScreen> {
                                             Container(
                                               padding: const EdgeInsets.all(11),
                                               decoration: BoxDecoration(
-                                                color: color.withOpacity(0.10),
+                                                color: color.withValues(alpha: 0.10),
                                                 borderRadius:
                                                     BorderRadius.circular(14),
                                               ),
@@ -447,7 +447,7 @@ class _AlertsScreenState extends State<AlertsScreen> {
                                                         decoration:
                                                             BoxDecoration(
                                                           color: color
-                                                              .withOpacity(0.10),
+                                                              .withValues(alpha: 0.10),
                                                           borderRadius:
                                                               BorderRadius
                                                                   .circular(6),
@@ -502,7 +502,7 @@ class _AlertsScreenState extends State<AlertsScreen> {
                                               ),
                                             ),
                                             Icon(Icons.chevron_right,
-                                                color: color.withOpacity(0.4),
+                                                color: color.withValues(alpha: 0.4),
                                                 size: 18),
                                           ],
                                         ),
@@ -596,7 +596,7 @@ class _AlertsScreenState extends State<AlertsScreen> {
                       Container(
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
-                          color: color.withOpacity(0.10),
+                          color: color.withValues(alpha: 0.10),
                           borderRadius: BorderRadius.circular(14),
                         ),
                         child: Icon(icon, color: color, size: 26),
@@ -819,10 +819,10 @@ class _AlertSummaryChip extends StatelessWidget {
         duration: const Duration(milliseconds: 180),
         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 7),
         decoration: BoxDecoration(
-          color: color.withOpacity(selected ? 0.40 : 0.15),
+          color: color.withValues(alpha: selected ? 0.40 : 0.15),
           borderRadius: BorderRadius.circular(10),
           border: Border.all(
-            color: selected ? Colors.white : color.withOpacity(0.4),
+            color: selected ? Colors.white : color.withValues(alpha: 0.4),
             width: selected ? 1.5 : 1,
           ),
         ),

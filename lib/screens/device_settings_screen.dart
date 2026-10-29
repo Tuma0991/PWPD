@@ -39,7 +39,8 @@ class _DeviceSettingsScreenState extends State<DeviceSettingsScreen> {
       if (picked == null) return;
       final bytes = await picked.readAsBytes();
       final base64 = base64Encode(bytes);
-      await _firebase.updateDeviceSettings(widget.deviceId, photoBase64: base64);
+      await _firebase.updateDeviceSettings(widget.deviceId,
+          photoBase64: base64);
     } catch (e) {
       if (mounted) {
         ToastNotification.show(
@@ -121,75 +122,105 @@ class _DeviceSettingsScreenState extends State<DeviceSettingsScreen> {
           return ListView(
             padding: const EdgeInsets.all(16),
             children: [
-              // ─── Wearer photo ──────────────────────────────────────────
-              Container(
-                padding: const EdgeInsets.symmetric(vertical: 20),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: Column(
-                  children: [
-                    GestureDetector(
-                      onTap: _uploading ? null : _pickPhoto,
-                      child: Stack(
-                        alignment: Alignment.center,
-                        children: [
-                          CircleAvatar(
-                            radius: 48,
-                            backgroundColor: const Color(0xFF1565C0)
-                                .withValues(alpha: 0.12),
-                            backgroundImage: settings.photoBase64.isNotEmpty
-                                ? MemoryImage(base64Decode(settings.photoBase64))
-                                : null,
-                            child: settings.photoBase64.isEmpty
-                                ? const Icon(Icons.person,
-                                    color: Color(0xFF1565C0), size: 40)
-                                : null,
+              if (widget.deviceId.isEmpty)
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFE3F2FD),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: const Row(
+                    children: [
+                      Icon(Icons.info_outline, color: Color(0xFF1565C0)),
+                      SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          'No device connected yet. Use "Device setup" below '
+                          'to connect your wearable, then you can set the '
+                          'wearer photo and name.',
+                          style: TextStyle(
+                            color: Color(0xFF1565C0),
+                            fontWeight: FontWeight.w600,
+                            height: 1.4,
                           ),
-                          if (_uploading)
-                            const Positioned.fill(
-                              child: Center(
-                                child: CircularProgressIndicator(
-                                  color: Color(0xFF1565C0),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              if (widget.deviceId.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                // ─── Wearer photo ──────────────────────────────────────────
+                Container(
+                  padding: const EdgeInsets.symmetric(vertical: 20),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Column(
+                    children: [
+                      GestureDetector(
+                        onTap: _uploading ? null : _pickPhoto,
+                        child: Stack(
+                          alignment: Alignment.center,
+                          children: [
+                            CircleAvatar(
+                              radius: 48,
+                              backgroundColor: const Color(0xFF1565C0)
+                                  .withValues(alpha: 0.12),
+                              backgroundImage: settings.photoBase64.isNotEmpty
+                                  ? MemoryImage(
+                                      base64Decode(settings.photoBase64))
+                                  : null,
+                              child: settings.photoBase64.isEmpty
+                                  ? const Icon(Icons.person,
+                                      color: Color(0xFF1565C0), size: 40)
+                                  : null,
+                            ),
+                            if (_uploading)
+                              const Positioned.fill(
+                                child: Center(
+                                  child: CircularProgressIndicator(
+                                    color: Color(0xFF1565C0),
+                                  ),
                                 ),
                               ),
-                            ),
-                        ],
+                          ],
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      _uploading ? 'Uploading…' : 'Tap to change photo',
-                      style: const TextStyle(
-                        color: Color(0xFF5C6B7A),
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
+                      const SizedBox(height: 8),
+                      Text(
+                        _uploading ? 'Uploading…' : 'Tap to change photo',
+                        style: const TextStyle(
+                          color: Color(0xFF5C6B7A),
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 12),
-
-              // ─── Wearer name ───────────────────────────────────────────
-              Container(
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: ListTile(
-                  leading: const Icon(Icons.badge, color: Color(0xFF1565C0)),
-                  title: const Text('Wearer name',
-                      style: TextStyle(fontWeight: FontWeight.w700)),
-                  subtitle: Text(
-                    settings.name.isEmpty ? 'Not set' : settings.name,
-                    style: const TextStyle(color: Color(0xFF5C6B7A)),
+                    ],
                   ),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: () => _editName(settings.name),
                 ),
-              ),
+                const SizedBox(height: 12),
+
+                // ─── Wearer name ───────────────────────────────────────────
+                Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: ListTile(
+                    leading: const Icon(Icons.badge, color: Color(0xFF1565C0)),
+                    title: const Text('Wearer name',
+                        style: TextStyle(fontWeight: FontWeight.w700)),
+                    subtitle: Text(
+                      settings.name.isEmpty ? 'Not set' : settings.name,
+                      style: const TextStyle(color: Color(0xFF5C6B7A)),
+                    ),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () => _editName(settings.name),
+                  ),
+                ),
+              ],
               const SizedBox(height: 12),
 
               // ─── Device setup (WiFi) ───────────────────────────────────
@@ -199,7 +230,8 @@ class _DeviceSettingsScreenState extends State<DeviceSettingsScreen> {
                   borderRadius: BorderRadius.circular(14),
                 ),
                 child: ListTile(
-                  leading: const Icon(Icons.bluetooth, color: Color(0xFF1565C0)),
+                  leading:
+                      const Icon(Icons.bluetooth, color: Color(0xFF1565C0)),
                   title: const Text('Device setup',
                       style: TextStyle(fontWeight: FontWeight.w700)),
                   subtitle: const Text('Connect or reconfigure your wearable'),

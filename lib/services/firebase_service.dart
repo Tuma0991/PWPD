@@ -5,6 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:flutter/foundation.dart';
 import '../models/device_data.dart';
 import '../models/contact_model.dart';
 import '../models/geofence_model.dart';
@@ -56,9 +57,14 @@ class FirebaseService {
     final GoogleSignInAccount googleUser;
     try {
       googleUser = await google.authenticate();
-    } on GoogleSignInException {
-      // User cancelled the sign-in flow or no account is available.
-      return null;
+    } on GoogleSignInException catch (e) {
+      // On Android, some configuration errors (e.g. a missing SHA-1) surface
+      // as `canceled`, so log every failure to make it visible in the console.
+      debugPrint('Google sign-in failed: ${e.code} — ${e.description}');
+      if (e.code == GoogleSignInExceptionCode.canceled) {
+        return null;
+      }
+      rethrow;
     }
 
     final idToken = googleUser.authentication.idToken;
@@ -91,7 +97,7 @@ class FirebaseService {
         'createdAt': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
     } catch (e) {
-      print('Warning: Failed to create user document: $e');
+      debugPrint('Warning: Failed to create user document: $e');
     }
   }
 
@@ -123,8 +129,8 @@ class FirebaseService {
   Stream<DeviceData> listenToDeviceData(String deviceId) {
     final ref = _rtdb.ref('devices/$deviceId/sensors');
     return ref.onValue.map((event) {
-      final data = Map<String, dynamic>.from(
-          event.snapshot.value as Map? ?? {});
+      final data =
+          Map<String, dynamic>.from(event.snapshot.value as Map? ?? {});
       return DeviceData.fromMap(data);
     });
   }
@@ -185,8 +191,9 @@ class FirebaseService {
         .doc(userId)
         .collection('contacts')
         .snapshots()
-        .map((snap) =>
-            snap.docs.map((d) => ContactModel.fromMap(d.id, d.data())).toList());
+        .map((snap) => snap.docs
+            .map((d) => ContactModel.fromMap(d.id, d.data()))
+            .toList());
   }
 
   Future<void> addContact(String userId, ContactModel contact) async {
@@ -225,8 +232,9 @@ class FirebaseService {
         .doc(userId)
         .collection('geofences')
         .snapshots()
-        .map((snap) =>
-            snap.docs.map((d) => GeofenceModel.fromMap(d.id, d.data())).toList());
+        .map((snap) => snap.docs
+            .map((d) => GeofenceModel.fromMap(d.id, d.data()))
+            .toList());
   }
 
   /// Add a new geofence
@@ -280,8 +288,8 @@ class FirebaseService {
   Stream<Map<String, dynamic>> listenToGeofenceViolationsRTDB(String deviceId) {
     final ref = _rtdb.ref('devices/$deviceId/geofence_violations');
     return ref.onChildAdded.map((event) {
-      final data = Map<String, dynamic>.from(
-          event.snapshot.value as Map? ?? {});
+      final data =
+          Map<String, dynamic>.from(event.snapshot.value as Map? ?? {});
       data['_rtdbKey'] = event.snapshot.key;
       return data;
     });
@@ -296,11 +304,7 @@ class FirebaseService {
     final lat = violationData['lat'];
     final lng = violationData['lng'];
 
-    await _firestore
-        .collection('users')
-        .doc(userId)
-        .collection('alerts')
-        .add({
+    await _firestore.collection('users').doc(userId).collection('alerts').add({
       'type': 'geofence_$type',
       'message': 'Device $type geofence "$name"',
       'deviceId': violationData['deviceId'] ?? '',
@@ -337,9 +341,7 @@ class FirebaseService {
             })
         .toList();
 
-    await _rtdb
-        .ref('devices/$deviceId/geofences')
-        .set(geofenceList);
+    await _rtdb.ref('devices/$deviceId/geofences').set(geofenceList);
   }
 
   // ─── DEVICE SETTINGS (wearer profile) ───────────────────────────────────
@@ -347,7 +349,9 @@ class FirebaseService {
   /// Live wearer profile (name + photo) for a device. Empty when not set.
   Stream<DeviceSettingsModel> listenToDeviceSettings(String deviceId) {
     final user = currentUser;
-    if (user == null) return Stream.value(const DeviceSettingsModel());
+    if (user == null || deviceId.isEmpty) {
+      return Stream.value(const DeviceSettingsModel());
+    }
     return _firestore
         .collection('users')
         .doc(user.uid)
@@ -390,9 +394,7 @@ class FirebaseService {
     final token = await FirebaseMessaging.instance.getToken();
     if (token == null) return;
 
-    await _rtdb
-        .ref('devices/$deviceId/fcmTokens/$userId')
-        .set({
+    await _rtdb.ref('devices/$deviceId/fcmTokens/$userId').set({
       'token': token,
       'platform': 'android',
       'registeredAt': ServerValue.timestamp,

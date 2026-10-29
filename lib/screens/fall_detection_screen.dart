@@ -345,10 +345,10 @@ class _FallDetectionScreenState extends State<FallDetectionScreen>
             width: 100,
             height: 100,
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.15),
+              color: Colors.white.withValues(alpha: 0.15),
               shape: BoxShape.circle,
               border: Border.all(
-                color: Colors.white.withOpacity(0.3),
+                color: Colors.white.withValues(alpha: 0.3),
                 width: 2.5,
               ),
             ),
@@ -370,13 +370,13 @@ class _FallDetectionScreenState extends State<FallDetectionScreen>
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.15),
+              color: Colors.white.withValues(alpha: 0.15),
               borderRadius: BorderRadius.circular(20),
             ),
             child: Text(
               subtitle,
               style: TextStyle(
-                color: Colors.white.withOpacity(0.90),
+                color: Colors.white.withValues(alpha: 0.90),
                 fontSize: 13,
                 fontWeight: FontWeight.w500,
               ),
@@ -428,7 +428,7 @@ class _FallDetectionScreenState extends State<FallDetectionScreen>
                   Container(
                     height: 8,
                     decoration: BoxDecoration(
-                      color: i <= idx ? color : color.withOpacity(0.12),
+                      color: i <= idx ? color : color.withValues(alpha: 0.12),
                       borderRadius: BorderRadius.circular(4),
                     ),
                   ),
@@ -523,10 +523,10 @@ class _FallDetectionScreenState extends State<FallDetectionScreen>
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: color.withOpacity(0.15)),
+        border: Border.all(color: color.withValues(alpha: 0.15)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.04),
+            color: Colors.black.withValues(alpha: 0.04),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
@@ -611,7 +611,7 @@ class _FallDetectionScreenState extends State<FallDetectionScreen>
             width: double.infinity,
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: color.withOpacity(0.08),
+              color: color.withValues(alpha: 0.08),
               borderRadius: BorderRadius.circular(12),
             ),
             child: Row(
@@ -670,7 +670,7 @@ class _FallDetectionScreenState extends State<FallDetectionScreen>
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: const Color(0xFF1565C0).withOpacity(0.12)),
+          border: Border.all(color: const Color(0xFF1565C0).withValues(alpha: 0.12)),
         ),
         child: ExpansionTile(
           tilePadding: const EdgeInsets.symmetric(horizontal: 16),
@@ -735,10 +735,10 @@ class _FallDetectionScreenState extends State<FallDetectionScreen>
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color(0xFF1565C0).withOpacity(0.12)),
+        border: Border.all(color: const Color(0xFF1565C0).withValues(alpha: 0.12)),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF1565C0).withOpacity(0.06),
+            color: const Color(0xFF1565C0).withValues(alpha: 0.06),
             blurRadius: 10,
             offset: const Offset(0, 3),
           ),
@@ -752,7 +752,7 @@ class _FallDetectionScreenState extends State<FallDetectionScreen>
               Container(
                 padding: const EdgeInsets.all(7),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF1565C0).withOpacity(0.10),
+                  color: const Color(0xFF1565C0).withValues(alpha: 0.10),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: const Icon(Icons.info_outline,
@@ -892,7 +892,7 @@ class _AccelBar extends StatelessWidget {
       decoration: BoxDecoration(
         color: const Color(0xFFF7F9FF),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: axisColor.withOpacity(0.12)),
+        border: Border.all(color: axisColor.withValues(alpha: 0.12)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -921,7 +921,7 @@ class _AccelBar extends StatelessWidget {
                 padding:
                     const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
-                  color: barColor.withOpacity(0.10),
+                  color: barColor.withValues(alpha: 0.10),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
@@ -940,7 +940,7 @@ class _AccelBar extends StatelessWidget {
             borderRadius: BorderRadius.circular(6),
             child: LinearProgressIndicator(
               value: normalized,
-              backgroundColor: barColor.withOpacity(0.10),
+              backgroundColor: barColor.withValues(alpha: 0.10),
               valueColor: AlwaysStoppedAnimation(barColor),
               minHeight: 10,
             ),
@@ -965,7 +965,7 @@ class _InfoRow extends StatelessWidget {
         Container(
           padding: const EdgeInsets.all(5),
           decoration: BoxDecoration(
-            color: const Color(0xFF1565C0).withOpacity(0.10),
+            color: const Color(0xFF1565C0).withValues(alpha: 0.10),
             borderRadius: BorderRadius.circular(8),
           ),
           child: Icon(icon, size: 14, color: const Color(0xFF1565C0)),

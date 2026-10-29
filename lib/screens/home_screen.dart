@@ -198,7 +198,7 @@ class _HomeScreenState extends State<HomeScreen> {
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: const Color(0xFFE53935).withOpacity(0.10),
+                color: const Color(0xFFE53935).withValues(alpha: 0.10),
                 shape: BoxShape.circle,
               ),
               child: Icon(
@@ -377,7 +377,7 @@ class _HomeScreenState extends State<HomeScreen> {
           color: Colors.white,
           boxShadow: [
             BoxShadow(
-              color: const Color(0xFF1565C0).withOpacity(0.08),
+              color: const Color(0xFF1565C0).withValues(alpha: 0.08),
               blurRadius: 20,
               offset: const Offset(0, -4),
             ),
@@ -512,7 +512,7 @@ class _CenterNavItem extends StatelessWidget {
               ),
               boxShadow: [
                 BoxShadow(
-                  color: blue.withOpacity(isActive ? 0.40 : 0.25),
+                  color: blue.withValues(alpha: isActive ? 0.40 : 0.25),
                   blurRadius: isActive ? 14 : 8,
                   offset: const Offset(0, 4),
                 ),
@@ -570,7 +570,7 @@ class _NavItem extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 8),
         decoration: BoxDecoration(
           color: isActive
-              ? const Color(0xFF1565C0).withOpacity(0.10)
+              ? const Color(0xFF1565C0).withValues(alpha: 0.10)
               : Colors.transparent,
           borderRadius: BorderRadius.circular(14),
         ),
@@ -788,7 +788,7 @@ class _DashboardTabState extends State<_DashboardTab>
                 children: [
                   Icon(Icons.error_outline,
                       size: 48,
-                      color: const Color(0xFFE53935).withOpacity(0.6)),
+                      color: const Color(0xFFE53935).withValues(alpha: 0.6)),
                   const SizedBox(height: 16),
                   const Text(
                     'Failed to load device data',
@@ -839,7 +839,7 @@ class _DashboardTabState extends State<_DashboardTab>
                     decoration: BoxDecoration(
                       color: const Color(0xFFFFF3E0),
                       borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: Colors.orange.withOpacity(0.3)),
+                      border: Border.all(color: Colors.orange.withValues(alpha: 0.3)),
                     ),
                     child: Row(
                       children: [
@@ -936,10 +936,10 @@ class _DashboardTabState extends State<_DashboardTab>
                         padding: const EdgeInsets.symmetric(
                             horizontal: 14, vertical: 8),
                         decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.15),
+                          color: Colors.white.withValues(alpha: 0.15),
                           borderRadius: BorderRadius.circular(20),
                           border: Border.all(
-                              color: Colors.white.withOpacity(0.25)),
+                              color: Colors.white.withValues(alpha: 0.25)),
                         ),
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
@@ -998,7 +998,7 @@ class _DashboardTabState extends State<_DashboardTab>
                               borderRadius: BorderRadius.circular(18),
                               boxShadow: [
                                 BoxShadow(
-                                  color: const Color(0xFFE53935).withOpacity(0.35),
+                                  color: const Color(0xFFE53935).withValues(alpha: 0.35),
                                   blurRadius: 16,
                                   offset: const Offset(0, 6),
                                 ),
@@ -1009,7 +1009,7 @@ class _DashboardTabState extends State<_DashboardTab>
                                 Container(
                                   padding: const EdgeInsets.all(8),
                                   decoration: BoxDecoration(
-                                    color: Colors.white.withOpacity(0.2),
+                                    color: Colors.white.withValues(alpha: 0.2),
                                     shape: BoxShape.circle,
                                   ),
                                   child: Icon(
@@ -1213,17 +1213,17 @@ class _StatusCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(18),
         boxShadow: [
           BoxShadow(
-            color: color.withOpacity(0.08),
+            color: color.withValues(alpha: 0.08),
             blurRadius: 12,
             offset: const Offset(0, 4),
           ),
           BoxShadow(
-            color: Colors.black.withOpacity(0.03),
+            color: Colors.black.withValues(alpha: 0.03),
             blurRadius: 4,
             offset: const Offset(0, 1),
           ),
         ],
-        border: Border.all(color: color.withOpacity(0.12)),
+        border: Border.all(color: color.withValues(alpha: 0.12)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1233,7 +1233,7 @@ class _StatusCard extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(7),
                 decoration: BoxDecoration(
-                  color: color.withOpacity(0.10),
+                  color: color.withValues(alpha: 0.10),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Icon(icon, color: color, size: 17),
@@ -1300,7 +1300,7 @@ class _InfoTile extends StatelessWidget {
         borderRadius: BorderRadius.circular(14),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.04),
+            color: Colors.black.withValues(alpha: 0.04),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
@@ -1311,7 +1311,7 @@ class _InfoTile extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(9),
             decoration: BoxDecoration(
-              color: color.withOpacity(0.10),
+              color: color.withValues(alpha: 0.10),
               borderRadius: BorderRadius.circular(12),
             ),
             child: Icon(icon, color: color, size: 18),

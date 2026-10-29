@@ -1,7 +1,7 @@
-name: pwpd
+name: personal_wearable_protection_device
 description: IoT Wearable Protection Device - Mobile App
 publish_to: 'none'
-version: 1.0.0+1
+version: 1.0.2+1
 
 environment:
   sdk: '>=3.0.0 <4.0.0'

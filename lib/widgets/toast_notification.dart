@@ -149,10 +149,10 @@ class _ToastViewState extends State<_ToastView>
               decoration: BoxDecoration(
                 color: widget.background,
                 borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: widget.color.withOpacity(0.35)),
+                border: Border.all(color: widget.color.withValues(alpha: 0.35)),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.15),
+                    color: Colors.black.withValues(alpha: 0.15),
                     blurRadius: 16,
                     offset: const Offset(0, 6),
                   ),
@@ -213,7 +213,7 @@ class _ToastViewState extends State<_ToastView>
                       builder: (_, __) => LinearProgressIndicator(
                         value: 1 - _ctrl!.value,
                         minHeight: 4,
-                        backgroundColor: widget.color.withOpacity(0.12),
+                        backgroundColor: widget.color.withValues(alpha: 0.12),
                         valueColor: AlwaysStoppedAnimation(widget.color),
                       ),
                     ),

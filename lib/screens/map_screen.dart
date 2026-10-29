@@ -411,10 +411,10 @@ class _MapScreenState extends State<MapScreen> with OfflineToastMixin {
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
             decoration: BoxDecoration(
               color: _isFollowing
-                  ? Colors.white.withOpacity(0.20)
-                  : Colors.white.withOpacity(0.08),
+                  ? Colors.white.withValues(alpha: 0.20)
+                  : Colors.white.withValues(alpha: 0.08),
               borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: Colors.white.withOpacity(0.35)),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.35)),
             ),
             child: Row(
               children: [
@@ -506,7 +506,6 @@ class _MapScreenState extends State<MapScreen> with OfflineToastMixin {
                       color: _polygonFillColor(gf),
                       borderColor: _polygonBorderColor(gf),
                       borderStrokeWidth: gf.enabled ? 2.5 : 1.0,
-                      isFilled: true,
                     ),
               ],
             ),
@@ -601,7 +600,7 @@ class _MapScreenState extends State<MapScreen> with OfflineToastMixin {
                     Container(
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.85),
+                        color: Colors.white.withValues(alpha: 0.85),
                         shape: BoxShape.circle,
                       ),
                       child: const Icon(
@@ -615,7 +614,7 @@ class _MapScreenState extends State<MapScreen> with OfflineToastMixin {
                       padding: const EdgeInsets.symmetric(
                           horizontal: 16, vertical: 8),
                       decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.85),
+                        color: Colors.white.withValues(alpha: 0.85),
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: const Text(
@@ -644,7 +643,7 @@ class _MapScreenState extends State<MapScreen> with OfflineToastMixin {
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF1565C0).withOpacity(0.12),
+            color: const Color(0xFF1565C0).withValues(alpha: 0.12),
             blurRadius: 20,
             offset: const Offset(0, 6),
           ),
@@ -655,7 +654,7 @@ class _MapScreenState extends State<MapScreen> with OfflineToastMixin {
           Container(
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              color: const Color(0xFF1565C0).withOpacity(0.10),
+              color: const Color(0xFF1565C0).withValues(alpha: 0.10),
               borderRadius: BorderRadius.circular(12),
             ),
             child: const Icon(
@@ -723,16 +722,16 @@ class _MapScreenState extends State<MapScreen> with OfflineToastMixin {
             decoration: BoxDecoration(
               color: hasLocation
                   ? (_latestData?.deviceOnline == true
-                      ? const Color(0xFF43A047).withOpacity(0.10)
-                      : const Color(0xFFE53935).withOpacity(0.08))
-                  : const Color(0xFF9EA8C2).withOpacity(0.10),
+                      ? const Color(0xFF43A047).withValues(alpha: 0.10)
+                      : const Color(0xFFE53935).withValues(alpha: 0.08))
+                  : const Color(0xFF9EA8C2).withValues(alpha: 0.10),
               borderRadius: BorderRadius.circular(10),
               border: Border.all(
                 color: hasLocation
                     ? (_latestData?.deviceOnline == true
-                        ? const Color(0xFF43A047).withOpacity(0.3)
-                        : const Color(0xFFE53935).withOpacity(0.3))
-                    : const Color(0xFF9EA8C2).withOpacity(0.3),
+                        ? const Color(0xFF43A047).withValues(alpha: 0.3)
+                        : const Color(0xFFE53935).withValues(alpha: 0.3))
+                    : const Color(0xFF9EA8C2).withValues(alpha: 0.3),
               ),
             ),
             child: Row(
@@ -816,7 +815,7 @@ class _MapScreenState extends State<MapScreen> with OfflineToastMixin {
                           border: Border.all(color: Colors.white, width: 2),
                           boxShadow: [
                             BoxShadow(
-                              color: Colors.black.withOpacity(0.3),
+                              color: Colors.black.withValues(alpha: 0.3),
                               blurRadius: 4,
                               offset: const Offset(0, 2),
                             ),
@@ -843,10 +842,9 @@ class _MapScreenState extends State<MapScreen> with OfflineToastMixin {
                   polygons: [
                     Polygon(
                       points: [..._vertices, _vertices.first],
-                      color: const Color(0xFF1565C0).withOpacity(0.10),
+                      color: const Color(0xFF1565C0).withValues(alpha: 0.10),
                       borderColor: const Color(0xFF1565C0),
                       borderStrokeWidth: 2.5,
-                      isFilled: true,
                     ),
                   ],
                 ),
@@ -944,7 +942,7 @@ class _MapScreenState extends State<MapScreen> with OfflineToastMixin {
                 Container(
                   padding: const EdgeInsets.all(7),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF1565C0).withOpacity(0.10),
+                    color: const Color(0xFF1565C0).withValues(alpha: 0.10),
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: Icon(
@@ -1053,7 +1051,7 @@ class _MapScreenState extends State<MapScreen> with OfflineToastMixin {
                         color: const Color(0xFFF0F4FF),
                         borderRadius: BorderRadius.circular(10),
                         border: Border.all(
-                          color: const Color(0xFF1565C0).withOpacity(0.2),
+                          color: const Color(0xFF1565C0).withValues(alpha: 0.2),
                         ),
                       ),
                       child: Column(
@@ -1281,7 +1279,7 @@ class _MapScreenState extends State<MapScreen> with OfflineToastMixin {
                             Container(
                               padding: const EdgeInsets.all(18),
                               decoration: BoxDecoration(
-                                color: const Color(0xFF1565C0).withOpacity(0.08),
+                                color: const Color(0xFF1565C0).withValues(alpha: 0.08),
                                 shape: BoxShape.circle,
                               ),
                               child: const Icon(
@@ -1465,15 +1463,15 @@ class _MapScreenState extends State<MapScreen> with OfflineToastMixin {
   }
 
   Color _polygonFillColor(GeofenceModel gf) {
-    if (!gf.enabled) return Colors.grey.withOpacity(0.05);
+    if (!gf.enabled) return Colors.grey.withValues(alpha: 0.05);
     final status = _deviceInsideGeofence[gf.id];
     if (status == true) {
-      return const Color(0xFF4CAF50).withOpacity(0.12);
+      return const Color(0xFF4CAF50).withValues(alpha: 0.12);
     }
     if (status == false) {
-      return const Color(0xFFE53935).withOpacity(0.12);
+      return const Color(0xFFE53935).withValues(alpha: 0.12);
     }
-    return const Color(0xFF1565C0).withOpacity(0.1);
+    return const Color(0xFF1565C0).withValues(alpha: 0.1);
   }
 
   Color _polygonBorderColor(GeofenceModel gf) {
@@ -1566,7 +1564,7 @@ class _MapScreenState extends State<MapScreen> with OfflineToastMixin {
           ElevatedButton(
             onPressed: () async {
               await _deleteGeofence(geofence.id);
-              if (mounted) Navigator.pop(dialogContext);
+              if (dialogContext.mounted) Navigator.pop(dialogContext);
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFFE53935),
@@ -1687,7 +1685,7 @@ class _DeviceMarker extends StatelessWidget {
           width: 48,
           height: 48,
           decoration: BoxDecoration(
-            color: const Color(0xFF1565C0).withOpacity(0.12),
+            color: const Color(0xFF1565C0).withValues(alpha: 0.12),
             shape: BoxShape.circle,
           ),
         ),
@@ -1700,7 +1698,7 @@ class _DeviceMarker extends StatelessWidget {
               border: Border.all(color: Colors.white, width: 2),
               boxShadow: [
                 BoxShadow(
-                  color: const Color(0xFF1565C0).withOpacity(0.4),
+                  color: const Color(0xFF1565C0).withValues(alpha: 0.4),
                   blurRadius: 6,
                   spreadRadius: 1,
                 ),
@@ -1729,7 +1727,7 @@ class _DeviceMarker extends StatelessWidget {
               shape: BoxShape.circle,
               boxShadow: [
                 BoxShadow(
-                  color: const Color(0xFF1565C0).withOpacity(0.4),
+                  color: const Color(0xFF1565C0).withValues(alpha: 0.4),
                   blurRadius: 6,
                   spreadRadius: 1,
                 ),
@@ -1807,7 +1805,7 @@ class _RouteProfileToggle extends StatelessWidget {
         borderRadius: BorderRadius.circular(22),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.18),
+            color: Colors.black.withValues(alpha: 0.18),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
@@ -1910,7 +1908,7 @@ class _EmergencyBanner extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFFE53935).withOpacity(0.35),
+            color: const Color(0xFFE53935).withValues(alpha: 0.35),
             blurRadius: 16,
             offset: const Offset(0, 6),
           ),
@@ -1921,7 +1919,7 @@ class _EmergencyBanner extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.2),
+              color: Colors.white.withValues(alpha: 0.2),
               shape: BoxShape.circle,
             ),
             child: Icon(
@@ -1993,10 +1991,10 @@ class _GeofenceCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: color.withOpacity(0.15), width: 1.5),
+        border: Border.all(color: color.withValues(alpha: 0.15), width: 1.5),
         boxShadow: [
           BoxShadow(
-            color: color.withOpacity(0.06),
+            color: color.withValues(alpha: 0.06),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
@@ -2010,7 +2008,7 @@ class _GeofenceCard extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: color.withOpacity(0.10),
+                  color: color.withValues(alpha: 0.10),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Icon(Icons.polyline, size: 18, color: color),
@@ -2036,7 +2034,7 @@ class _GeofenceCard extends StatelessWidget {
                         fontSize: 12,
                         color: geofence.enabled
                             ? const Color(0xFF6B7A99)
-                            : Colors.grey.withOpacity(0.6),
+                            : Colors.grey.withValues(alpha: 0.6),
                       ),
                     ),
                     if (geofence.enabled && isDeviceInside != null)
@@ -2075,7 +2073,7 @@ class _GeofenceCard extends StatelessWidget {
               Switch(
                 value: geofence.enabled,
                 onChanged: (_) => onToggle(),
-                activeColor: const Color(0xFF1565C0),
+                activeThumbColor: const Color(0xFF1565C0),
               ),
             ],
           ),

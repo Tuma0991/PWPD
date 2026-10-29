@@ -33,6 +33,16 @@ class _AuthScreenState extends State<AuthScreen>
   bool _rememberMe = false;
   String? _errorMsg;
 
+  // Inline field-level validation errors (shown beneath each input).
+  String? _loginEmailError;
+  String? _loginPassError;
+  String? _regNameError;
+  String? _regEmailError;
+  String? _regPassError;
+  String? _regConfirmError;
+
+  static final RegExp _emailRegex = RegExp(r'^[\w.+-]+@[\w-]+(\.[\w-]+)+$');
+
   @override
   void initState() {
     super.initState();
@@ -78,11 +88,78 @@ class _AuthScreenState extends State<AuthScreen>
     await prefs.remove('savedEmail');
   }
 
-  Future<void> _login() async {
-    if (_loginEmailCtrl.text.isEmpty || _loginPassCtrl.text.isEmpty) {
-      _showError('Please fill in all fields');
-      return;
+  // ─── Client-side validation ──────────────────────────────────────────────
+
+  String? _validateEmail(String? value) {
+    final email = value?.trim() ?? '';
+    if (email.isEmpty) return 'Email is required';
+    if (!_emailRegex.hasMatch(email)) return 'Enter a valid email address';
+    return null;
+  }
+
+  String? _validatePassword(String? value) {
+    final pass = value ?? '';
+    if (pass.isEmpty) return 'Password is required';
+    if (pass.length < 8) return 'At least 8 characters';
+    if (!RegExp(r'[A-Z]').hasMatch(pass)) return 'Add an uppercase letter';
+    if (!RegExp(r'[a-z]').hasMatch(pass)) return 'Add a lowercase letter';
+    if (!RegExp(r'[0-9]').hasMatch(pass)) return 'Add a number';
+    if (!RegExp(r'[^A-Za-z0-9]').hasMatch(pass)) {
+      return 'Add a symbol (e.g. !@#\$%)';
     }
+    return null;
+  }
+
+  bool _validateLoginFields() {
+    final emailError = _validateEmail(_loginEmailCtrl.text);
+    final passError =
+        _loginPassCtrl.text.isEmpty ? 'Password is required' : null;
+    setState(() {
+      _loginEmailError = emailError;
+      _loginPassError = passError;
+    });
+    return emailError == null && passError == null;
+  }
+
+  bool _validateRegisterFields() {
+    final name = _regNameCtrl.text.trim();
+    final email = _regEmailCtrl.text.trim();
+    final pass = _regPassCtrl.text;
+    final confirm = _regConfirmPassCtrl.text;
+
+    String? nameError;
+    if (name.isEmpty) {
+      nameError = 'Full name is required';
+    } else if (name.length < 2) {
+      nameError = 'Name must be at least 2 characters';
+    }
+
+    final emailError = _validateEmail(email);
+    final passError = _validatePassword(pass);
+
+    String? confirmError;
+    if (confirm.isEmpty) {
+      confirmError = 'Confirm your password';
+    } else if (passError == null && confirm != pass) {
+      confirmError = 'Passwords do not match';
+    }
+
+    setState(() {
+      _regNameError = nameError;
+      _regEmailError = emailError;
+      _regPassError = passError;
+      _regConfirmError = confirmError;
+    });
+    return nameError == null &&
+        emailError == null &&
+        passError == null &&
+        confirmError == null;
+  }
+
+  // ─── Auth actions ────────────────────────────────────────────────────────
+
+  Future<void> _login() async {
+    if (!_validateLoginFields()) return;
     setState(() => _loading = true);
     try {
       await _firebase.signIn(_loginEmailCtrl.text.trim(), _loginPassCtrl.text);
@@ -92,27 +169,14 @@ class _AuthScreenState extends State<AuthScreen>
         await _clearSavedEmail();
       }
     } catch (e) {
-      _showError(_parseError(e.toString()));
+      _handleLoginError(e);
     } finally {
       if (mounted) setState(() => _loading = false);
     }
   }
 
   Future<void> _register() async {
-    if (_regNameCtrl.text.isEmpty ||
-        _regEmailCtrl.text.isEmpty ||
-        _regPassCtrl.text.isEmpty) {
-      _showError('Please fill in all fields');
-      return;
-    }
-    if (_regPassCtrl.text != _regConfirmPassCtrl.text) {
-      _showError('Passwords do not match');
-      return;
-    }
-    if (_regPassCtrl.text.length < 6) {
-      _showError('Password must be at least 6 characters');
-      return;
-    }
+    if (!_validateRegisterFields()) return;
     setState(() => _loading = true);
     try {
       await _firebase.register(
@@ -121,7 +185,7 @@ class _AuthScreenState extends State<AuthScreen>
         _regNameCtrl.text.trim(),
       );
     } catch (e) {
-      _showError(_parseError(e.toString()));
+      _handleRegisterError(e);
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -139,15 +203,97 @@ class _AuthScreenState extends State<AuthScreen>
     }
   }
 
+  // ─── Error handling ──────────────────────────────────────────────────────
+
+  /// Maps sign-in failures onto the relevant field so the user sees exactly
+  /// which credential is wrong, rather than a generic banner.
+  void _handleLoginError(Object e) {
+    final msg = e.toString();
+    if (msg.contains('wrong-password') || msg.contains('invalid-credential')) {
+      setState(() {
+        _loginEmailError = null;
+        _loginPassError = 'Incorrect password';
+        _errorMsg = null;
+      });
+    } else if (msg.contains('user-not-found')) {
+      setState(() {
+        _loginEmailError = 'No account found with this email';
+        _loginPassError = null;
+        _errorMsg = null;
+      });
+    } else if (msg.contains('invalid-email')) {
+      setState(() {
+        _loginEmailError = 'Enter a valid email address';
+        _loginPassError = null;
+        _errorMsg = null;
+      });
+    } else if (msg.contains('too-many-requests')) {
+      _showError('Too many attempts. Please wait a moment and try again.');
+    } else {
+      _showError(_parseError(msg));
+    }
+  }
+
+  void _handleRegisterError(Object e) {
+    final msg = e.toString();
+    if (msg.contains('email-already-in-use')) {
+      setState(() {
+        _regEmailError = 'Email already registered. Sign in instead.';
+        _errorMsg = null;
+      });
+    } else if (msg.contains('invalid-email')) {
+      setState(() {
+        _regEmailError = 'Enter a valid email address';
+        _errorMsg = null;
+      });
+    } else if (msg.contains('weak-password')) {
+      setState(() {
+        _regPassError =
+            'Password is too weak. Use at least 8 characters with upper/lowercase letters, a number and a symbol.';
+        _errorMsg = null;
+      });
+    } else if (msg.contains('too-many-requests')) {
+      _showError('Too many attempts. Please wait a moment and try again.');
+    } else {
+      _showError(_parseError(msg));
+    }
+  }
+
   String _parseError(String error) {
-    if (error.contains('user-not-found')) return 'No account found with this email.';
-    if (error.contains('wrong-password')) return 'Incorrect password.';
-    if (error.contains('email-already-in-use')) return 'Email already registered.';
+    if (error.contains('user-not-found')) {
+      return 'No account found with this email.';
+    }
+    if (error.contains('wrong-password')) {
+      return 'Incorrect password.';
+    }
+    if (error.contains('invalid-credential')) {
+      return 'Incorrect email or password.';
+    }
+    if (error.contains('email-already-in-use')) {
+      return 'Email already registered.';
+    }
     if (error.contains('account-exists-with-different-credential')) {
       return 'An account already exists with this email. Sign in with your original method.';
     }
-    if (error.contains('invalid-email')) return 'Invalid email address.';
-    if (error.contains('network-request-failed')) return 'Network error. Check connection.';
+    if (error.contains('invalid-email')) {
+      return 'Invalid email address.';
+    }
+    if (error.contains('weak-password')) {
+      return 'Password is too weak. Use at least 8 characters with letters and numbers.';
+    }
+    if (error.contains('network-request-failed')) {
+      return 'Network error. Check connection.';
+    }
+    if (error.contains('too-many-requests')) {
+      return 'Too many attempts. Try again later.';
+    }
+    if (error.contains('operation-not-allowed')) {
+      return 'Google sign-in is not enabled. Enable it in Firebase Authentication.';
+    }
+    if (error.contains('clientConfigurationError') ||
+        error.contains('providerConfigurationError')) {
+      return 'Google sign-in is misconfigured. Add your app SHA-1 fingerprint in the Firebase console.';
+    }
     return 'Something went wrong. Please try again.';
   }
 
@@ -165,7 +311,11 @@ class _AuthScreenState extends State<AuthScreen>
                 padding: const EdgeInsets.fromLTRB(28, 40, 28, 36),
                 decoration: const BoxDecoration(
                   gradient: LinearGradient(
-                    colors: [Color(0xFF1565C0), Color(0xFF1E88E5), Color(0xFF42A5F5)],
+                    colors: [
+                      Color(0xFF1565C0),
+                      Color(0xFF1E88E5),
+                      Color(0xFF42A5F5)
+                    ],
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                   ),
@@ -181,10 +331,10 @@ class _AuthScreenState extends State<AuthScreen>
                       width: 72,
                       height: 72,
                       decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.18),
+                        color: Colors.white.withValues(alpha: 0.18),
                         shape: BoxShape.circle,
                         border: Border.all(
-                          color: Colors.white.withOpacity(0.35),
+                          color: Colors.white.withValues(alpha: 0.35),
                           width: 2,
                         ),
                       ),
@@ -213,20 +363,23 @@ class _AuthScreenState extends State<AuthScreen>
                       'Personal Wearable Protection Device',
                       style: TextStyle(
                         fontSize: 15,
-                        color: Colors.white.withOpacity(0.85),
+                        color: Colors.white.withValues(alpha: 0.85),
                         fontWeight: FontWeight.w500,
                         letterSpacing: 0.3,
                       ),
                     ),
                     const SizedBox(height: 20),
                     // Feature pills
-                    Wrap(
+                    const Wrap(
                       spacing: 8,
                       runSpacing: 8,
-                      children: const [
-                        _FeaturePill(icon: Icons.sensors, label: 'Fall Detection'),
+                      children: [
+                        _FeaturePill(
+                            icon: Icons.sensors, label: 'Fall Detection'),
                         _FeaturePill(icon: Icons.gps_fixed, label: 'Live GPS'),
-                        _FeaturePill(icon: Icons.notifications_active, label: 'SOS Alerts'),
+                        _FeaturePill(
+                            icon: Icons.notifications_active,
+                            label: 'SOS Alerts'),
                       ],
                     ),
                   ],
@@ -243,12 +396,12 @@ class _AuthScreenState extends State<AuthScreen>
                   borderRadius: BorderRadius.circular(28),
                   boxShadow: [
                     BoxShadow(
-                      color: const Color(0xFF1565C0).withOpacity(0.10),
+                      color: const Color(0xFF1565C0).withValues(alpha: 0.10),
                       blurRadius: 24,
                       offset: const Offset(0, 8),
                     ),
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.04),
+                      color: Colors.black.withValues(alpha: 0.04),
                       blurRadius: 8,
                       offset: const Offset(0, 2),
                     ),
@@ -274,7 +427,8 @@ class _AuthScreenState extends State<AuthScreen>
                             borderRadius: BorderRadius.circular(12),
                             boxShadow: [
                               BoxShadow(
-                                color: const Color(0xFF1565C0).withOpacity(0.3),
+                                color: const Color(0xFF1565C0)
+                                    .withValues(alpha: 0.3),
                                 blurRadius: 8,
                                 offset: const Offset(0, 2),
                               ),
@@ -300,11 +454,14 @@ class _AuthScreenState extends State<AuthScreen>
                       Padding(
                         padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
                         child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 14, vertical: 12),
                           decoration: BoxDecoration(
                             color: const Color(0xFFFFEBEE),
                             borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: const Color(0xFFE53935).withOpacity(0.3)),
+                            border: Border.all(
+                                color: const Color(0xFFE53935)
+                                    .withValues(alpha: 0.3)),
                           ),
                           child: Row(
                             children: [
@@ -343,8 +500,8 @@ class _AuthScreenState extends State<AuthScreen>
                       padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
                       child: Column(
                         children: [
-                          Row(
-                            children: const [
+                          const Row(
+                            children: [
                               Expanded(
                                 child: Divider(color: Color(0xFFDDE3F0)),
                               ),
@@ -413,6 +570,12 @@ class _AuthScreenState extends State<AuthScreen>
             label: 'Email address',
             icon: Icons.email_outlined,
             keyboardType: TextInputType.emailAddress,
+            errorText: _loginEmailError,
+            onChanged: (_) {
+              if (_loginEmailError != null) {
+                setState(() => _loginEmailError = null);
+              }
+            },
           ),
           const SizedBox(height: 14),
           _GuardianTextField(
@@ -420,9 +583,17 @@ class _AuthScreenState extends State<AuthScreen>
             label: 'Password',
             icon: Icons.lock_outline,
             obscureText: _obscureLogin,
+            errorText: _loginPassError,
+            onChanged: (_) {
+              if (_loginPassError != null) {
+                setState(() => _loginPassError = null);
+              }
+            },
             suffixIcon: IconButton(
               icon: Icon(
-                _obscureLogin ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                _obscureLogin
+                    ? Icons.visibility_off_outlined
+                    : Icons.visibility_outlined,
                 color: const Color(0xFF6B7A99),
                 size: 20,
               ),
@@ -439,9 +610,11 @@ class _AuthScreenState extends State<AuthScreen>
                     scale: 0.85,
                     child: Checkbox(
                       value: _rememberMe,
-                      onChanged: (v) => setState(() => _rememberMe = v ?? false),
+                      onChanged: (v) =>
+                          setState(() => _rememberMe = v ?? false),
                       activeColor: const Color(0xFF1565C0),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(4)),
                     ),
                   ),
                   const Text('Remember me',
@@ -450,15 +623,18 @@ class _AuthScreenState extends State<AuthScreen>
               ),
               TextButton(
                 onPressed: () async {
-                  if (_loginEmailCtrl.text.isEmpty) {
-                    _showError('Enter your email first');
+                  final email = _loginEmailCtrl.text.trim();
+                  final emailError = _validateEmail(email);
+                  if (emailError != null) {
+                    setState(() => _loginEmailError = emailError);
                     return;
                   }
                   try {
-                    await _firebase.resetPassword(_loginEmailCtrl.text.trim());
+                    await _firebase.resetPassword(email);
                     if (mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Password reset email sent!')),
+                        const SnackBar(
+                            content: Text('Password reset email sent!')),
                       );
                     }
                   } catch (_) {
@@ -519,6 +695,11 @@ class _AuthScreenState extends State<AuthScreen>
             controller: _regNameCtrl,
             label: 'Full Name',
             icon: Icons.person_outline,
+            textCapitalization: TextCapitalization.words,
+            errorText: _regNameError,
+            onChanged: (_) {
+              if (_regNameError != null) setState(() => _regNameError = null);
+            },
           ),
           const SizedBox(height: 14),
           _GuardianTextField(
@@ -526,6 +707,10 @@ class _AuthScreenState extends State<AuthScreen>
             label: 'Email address',
             icon: Icons.email_outlined,
             keyboardType: TextInputType.emailAddress,
+            errorText: _regEmailError,
+            onChanged: (_) {
+              if (_regEmailError != null) setState(() => _regEmailError = null);
+            },
           ),
           const SizedBox(height: 14),
           _GuardianTextField(
@@ -533,9 +718,15 @@ class _AuthScreenState extends State<AuthScreen>
             label: 'Password',
             icon: Icons.lock_outline,
             obscureText: _obscureReg,
+            errorText: _regPassError,
+            onChanged: (_) {
+              if (_regPassError != null) setState(() => _regPassError = null);
+            },
             suffixIcon: IconButton(
               icon: Icon(
-                _obscureReg ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                _obscureReg
+                    ? Icons.visibility_off_outlined
+                    : Icons.visibility_outlined,
                 color: const Color(0xFF6B7A99),
                 size: 20,
               ),
@@ -548,6 +739,12 @@ class _AuthScreenState extends State<AuthScreen>
             label: 'Confirm Password',
             icon: Icons.lock_outline,
             obscureText: _obscureReg,
+            errorText: _regConfirmError,
+            onChanged: (_) {
+              if (_regConfirmError != null) {
+                setState(() => _regConfirmError = null);
+              }
+            },
           ),
           const SizedBox(height: 20),
           _GuardianButton(
@@ -574,9 +771,9 @@ class _FeaturePill extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.18),
+        color: Colors.white.withValues(alpha: 0.18),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.white.withOpacity(0.3)),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.3)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -604,6 +801,9 @@ class _GuardianTextField extends StatelessWidget {
   final TextInputType? keyboardType;
   final bool obscureText;
   final Widget? suffixIcon;
+  final String? errorText;
+  final ValueChanged<String>? onChanged;
+  final TextCapitalization? textCapitalization;
 
   const _GuardianTextField({
     required this.controller,
@@ -612,6 +812,9 @@ class _GuardianTextField extends StatelessWidget {
     this.keyboardType,
     this.obscureText = false,
     this.suffixIcon,
+    this.errorText,
+    this.onChanged,
+    this.textCapitalization,
   });
 
   @override
@@ -620,6 +823,8 @@ class _GuardianTextField extends StatelessWidget {
       controller: controller,
       keyboardType: keyboardType,
       obscureText: obscureText,
+      onChanged: onChanged,
+      textCapitalization: textCapitalization ?? TextCapitalization.none,
       style: const TextStyle(
         fontSize: 14,
         fontWeight: FontWeight.w500,
@@ -633,6 +838,7 @@ class _GuardianTextField extends StatelessWidget {
         ),
         prefixIcon: Icon(icon, color: const Color(0xFF1565C0), size: 20),
         suffixIcon: suffixIcon,
+        errorText: errorText,
         filled: true,
         fillColor: const Color(0xFFF7F9FF),
         enabledBorder: OutlineInputBorder(
@@ -643,7 +849,16 @@ class _GuardianTextField extends StatelessWidget {
           borderRadius: BorderRadius.circular(14),
           borderSide: const BorderSide(color: Color(0xFF1565C0), width: 2),
         ),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        errorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: const BorderSide(color: Color(0xFFE53935), width: 1.5),
+        ),
+        focusedErrorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: const BorderSide(color: Color(0xFFE53935), width: 2),
+        ),
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       ),
     );
   }
@@ -713,7 +928,8 @@ class _GoogleButton extends StatelessWidget {
           foregroundColor: const Color(0xFF1A2340),
           backgroundColor: Colors.white,
           side: const BorderSide(color: Color(0xFFDDE3F0), width: 1.5),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         ),
         child: loading
             ? const SizedBox(

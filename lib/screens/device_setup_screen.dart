@@ -136,20 +136,43 @@ class _DeviceSetupScreenState extends State<DeviceSetupScreen> {
       _errorMessage = null;
     });
 
-    // Check Bluetooth adapter state
-    final btState = await FlutterBluePlus.adapterState.first;
-    if (btState != BluetoothAdapterState.on) {
-      _btOn = false;
-      if (!mounted) return;
-      setState(() => _isScanning = false);
-      _showBluetoothOffToast();
-      return;
-    }
-    _btOn = true;
+    try {
+      // Guard against platforms without Bluetooth (desktop, emulator, etc.).
+      // On such devices `adapterState`/`startScan` throw, which used to surface
+      // as an unhandled "Invalid argument(s)" error.
+      if (!await FlutterBluePlus.isSupported) {
+        _btOn = false;
+        if (!mounted) return;
+        setState(() {
+          _isScanning = false;
+          _errorMessage = 'Bluetooth is not supported on this device.';
+        });
+        return;
+      }
 
-    // Request runtime permissions (critical on Android 12+)
-    if (!await _checkPermissions()) {
-      setState(() => _isScanning = false);
+      // Check Bluetooth adapter state
+      final btState = await FlutterBluePlus.adapterState.first;
+      if (btState != BluetoothAdapterState.on) {
+        _btOn = false;
+        if (!mounted) return;
+        setState(() => _isScanning = false);
+        _showBluetoothOffToast();
+        return;
+      }
+      _btOn = true;
+
+      // Request runtime permissions (critical on Android 12+)
+      if (!await _checkPermissions()) {
+        setState(() => _isScanning = false);
+        return;
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _isScanning = false;
+        _errorMessage = 'Unable to start Bluetooth: '
+            '${e.toString().replaceFirst('Exception: ', '')}';
+      });
       return;
     }
 
@@ -169,7 +192,14 @@ class _DeviceSetupScreenState extends State<DeviceSetupScreen> {
           });
         }
       },
-      onError: (_) {},
+      onError: (Object e) {
+        if (!mounted) return;
+        setState(() {
+          _isScanning = false;
+          _errorMessage = 'Scan failed: '
+              '${e.toString().replaceFirst('Exception: ', '')}';
+        });
+      },
     );
 
     _scanSub?.onDone(() {
@@ -318,7 +348,7 @@ class _DeviceSetupScreenState extends State<DeviceSetupScreen> {
                 width: 64,
                 height: 64,
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.15),
+                  color: Colors.white.withValues(alpha: 0.15),
                   shape: BoxShape.circle,
                 ),
                 child: _isScanning
@@ -347,7 +377,7 @@ class _DeviceSetupScreenState extends State<DeviceSetupScreen> {
                     : 'Scan complete. ${guardian.length} Guardian device(s),\n${others.length} other device(s) found.',
                 textAlign: TextAlign.center,
                 style: TextStyle(
-                  color: Colors.white.withOpacity(0.8),
+                  color: Colors.white.withValues(alpha: 0.8),
                   fontSize: 13,
                   height: 1.5,
                 ),
@@ -369,7 +399,7 @@ class _DeviceSetupScreenState extends State<DeviceSetupScreen> {
                       Icon(
                         Icons.bluetooth_searching,
                         size: 48,
-                        color: const Color(0xFF9EA8C2).withOpacity(0.5),
+                        color: const Color(0xFF9EA8C2).withValues(alpha: 0.5),
                       ),
                       const SizedBox(height: 12),
                       Text(
@@ -438,7 +468,7 @@ class _DeviceSetupScreenState extends State<DeviceSetupScreen> {
               Container(
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF1565C0).withOpacity(0.1),
+                  color: const Color(0xFF1565C0).withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: const Icon(Icons.wifi, color: Color(0xFF1565C0), size: 22),
@@ -525,7 +555,7 @@ class _DeviceSetupScreenState extends State<DeviceSetupScreen> {
             width: 80,
             height: 80,
             decoration: BoxDecoration(
-              color: const Color(0xFF1565C0).withOpacity(0.1),
+              color: const Color(0xFF1565C0).withValues(alpha: 0.1),
               shape: BoxShape.circle,
             ),
             child: const Padding(
@@ -640,8 +670,8 @@ class _DeviceSetupScreenState extends State<DeviceSetupScreen> {
             Container(
               width: 80,
               height: 80,
-              decoration: BoxDecoration(
-                color: const Color(0xFFFFEBEE),
+              decoration: const BoxDecoration(
+                color: Color(0xFFFFEBEE),
                 shape: BoxShape.circle,
               ),
               child: const Icon(Icons.error_outline, color: Color(0xFFE53935), size: 44),
@@ -726,8 +756,8 @@ class _DeviceCard extends StatelessWidget {
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
                     color: isGuardian
-                        ? const Color(0xFF1565C0).withOpacity(0.1)
-                        : const Color(0xFF6B7A99).withOpacity(0.08),
+                        ? const Color(0xFF1565C0).withValues(alpha: 0.1)
+                        : const Color(0xFF6B7A99).withValues(alpha: 0.08),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Icon(
@@ -784,7 +814,7 @@ class _DeviceCard extends StatelessWidget {
                         isGuardian ? 'Tap to configure' : 'Other device',
                         style: TextStyle(
                           fontSize: 12,
-                          color: const Color(0xFF6B7A99).withOpacity(0.8),
+                          color: const Color(0xFF6B7A99).withValues(alpha: 0.8),
                         ),
                       ),
                     ],
@@ -921,7 +951,7 @@ class _ErrorBanner extends StatelessWidget {
       decoration: BoxDecoration(
         color: const Color(0xFFFFEBEE),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFE53935).withOpacity(0.3)),
+        border: Border.all(color: const Color(0xFFE53935).withValues(alpha: 0.3)),
       ),
       child: Row(
         children: [

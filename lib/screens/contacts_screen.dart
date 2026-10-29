@@ -65,7 +65,7 @@ class ContactsScreen extends StatelessWidget {
                         Container(
                           padding: const EdgeInsets.all(24),
                           decoration: BoxDecoration(
-                            color: const Color(0xFF1565C0).withOpacity(0.08),
+                            color: const Color(0xFF1565C0).withValues(alpha: 0.08),
                             shape: BoxShape.circle,
                           ),
                           child: const Icon(
@@ -194,7 +194,7 @@ class ContactsScreen extends StatelessWidget {
                   Container(
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF1565C0).withOpacity(0.10),
+                      color: const Color(0xFF1565C0).withValues(alpha: 0.10),
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: const Icon(Icons.person_add,
@@ -244,7 +244,7 @@ class ContactsScreen extends StatelessWidget {
                       border: Border.all(color: const Color(0xFFDDE3F0)),
                     ),
                     child: DropdownButtonFormField<String>(
-                      value: carrierSmsGateways.containsKey(carrier)
+                      initialValue: carrierSmsGateways.containsKey(carrier)
                           ? carrier
                           : null,
                       decoration: const InputDecoration(
@@ -279,7 +279,7 @@ class ContactsScreen extends StatelessWidget {
                   borderRadius: BorderRadius.circular(14),
                   border: Border.all(
                     color: isEmergency
-                        ? const Color(0xFFE53935).withOpacity(0.3)
+                        ? const Color(0xFFE53935).withValues(alpha: 0.3)
                         : const Color(0xFFDDE3F0),
                   ),
                 ),
@@ -303,7 +303,7 @@ class ContactsScreen extends StatelessWidget {
                     'Will be notified via SMS during alerts',
                     style: TextStyle(fontSize: 12, color: Color(0xFF6B7A99)),
                   ),
-                  activeColor: const Color(0xFFE53935),
+                  activeThumbColor: const Color(0xFFE53935),
                   contentPadding: EdgeInsets.zero,
                 ),
               ),
@@ -419,7 +419,7 @@ class _SectionHeader extends StatelessWidget {
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
           decoration: BoxDecoration(
-            color: color.withOpacity(0.12),
+            color: color.withValues(alpha: 0.12),
             borderRadius: BorderRadius.circular(10),
           ),
           child: Text(
@@ -460,10 +460,10 @@ class _ContactCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: color.withOpacity(0.15), width: 1.5),
+        border: Border.all(color: color.withValues(alpha: 0.15), width: 1.5),
         boxShadow: [
           BoxShadow(
-            color: color.withOpacity(0.06),
+            color: color.withValues(alpha: 0.06),
             blurRadius: 10,
             offset: const Offset(0, 3),
           ),
@@ -477,14 +477,14 @@ class _ContactCard extends StatelessWidget {
             decoration: BoxDecoration(
               gradient: LinearGradient(
                 colors: [
-                  color.withOpacity(0.15),
-                  color.withOpacity(0.08),
+                  color.withValues(alpha: 0.15),
+                  color.withValues(alpha: 0.08),
                 ],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
               shape: BoxShape.circle,
-              border: Border.all(color: color.withOpacity(0.25), width: 1.5),
+              border: Border.all(color: color.withValues(alpha: 0.25), width: 1.5),
             ),
             child: Center(
               child: Text(
@@ -521,7 +521,7 @@ class _ContactCard extends StatelessWidget {
                         padding: const EdgeInsets.symmetric(
                             horizontal: 6, vertical: 2),
                         decoration: BoxDecoration(
-                          color: const Color(0xFFE53935).withOpacity(0.10),
+                          color: const Color(0xFFE53935).withValues(alpha: 0.10),
                           borderRadius: BorderRadius.circular(6),
                         ),
                         child: const Text(
@@ -551,14 +551,14 @@ class _ContactCard extends StatelessWidget {
                     if (contact.carrier.isNotEmpty) ...[
                       const SizedBox(width: 6),
                       Icon(Icons.sim_card_outlined,
-                          size: 11, color: color.withOpacity(0.6)),
+                          size: 11, color: color.withValues(alpha: 0.6)),
                       const SizedBox(width: 2),
                       Flexible(
                         child: Text(
                           contact.carrier,
                           style: TextStyle(
                               fontSize: 10,
-                              color: color.withOpacity(0.7),
+                              color: color.withValues(alpha: 0.7),
                               fontWeight: FontWeight.w600),
                           overflow: TextOverflow.ellipsis,
                         ),
@@ -582,7 +582,7 @@ class _ContactCard extends StatelessWidget {
           Container(
             margin: const EdgeInsets.only(right: 4),
             decoration: BoxDecoration(
-              color: const Color(0xFF2E7D32).withOpacity(0.10),
+              color: const Color(0xFF2E7D32).withValues(alpha: 0.10),
               shape: BoxShape.circle,
             ),
             child: IconButton(
