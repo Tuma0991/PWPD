@@ -4,6 +4,7 @@ import 'package:firebase_database/firebase_database.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 import '../models/device_data.dart';
 import '../models/contact_model.dart';
 import '../models/geofence_model.dart';
@@ -17,6 +18,8 @@ class FirebaseService {
   FirebaseAuth get _auth => FirebaseAuth.instance;
   FirebaseDatabase get _rtdb => FirebaseDatabase.instance;
   FirebaseFirestore get _firestore => FirebaseFirestore.instance;
+
+  bool _googleInitialized = false;
 
   // ─── AUTH ────────────────────────────────────────────────────────────────
 
@@ -37,18 +40,59 @@ class FirebaseService {
       password: password,
     );
     await cred.user?.updateDisplayName(name);
-    
-    // Create user document with error handling
+    await _ensureUserDocument(cred.user!, name: name, email: email);
+    return cred;
+  }
+
+  /// Signs the user in with their Google account. Returns null if the user
+  /// cancels the Google account picker, otherwise the resulting credential.
+  Future<UserCredential?> signInWithGoogle() async {
+    final google = GoogleSignIn.instance;
+    if (!_googleInitialized) {
+      await google.initialize();
+      _googleInitialized = true;
+    }
+
+    final GoogleSignInAccount googleUser;
     try {
-      await _firestore.collection('users').doc(cred.user!.uid).set({
-        'name': name,
-        'email': email,
+      googleUser = await google.authenticate();
+    } on GoogleSignInException {
+      // User cancelled the sign-in flow or no account is available.
+      return null;
+    }
+
+    final idToken = googleUser.authentication.idToken;
+    if (idToken == null) {
+      throw FirebaseAuthException(
+        code: 'google-id-token-missing',
+        message: 'Google sign-in did not return an ID token.',
+      );
+    }
+
+    final credential = GoogleAuthProvider.credential(idToken: idToken);
+    final userCredential = await _auth.signInWithCredential(credential);
+    await _ensureUserDocument(
+      userCredential.user!,
+      name: googleUser.displayName,
+      email: googleUser.email,
+    );
+    return userCredential;
+  }
+
+  Future<void> _ensureUserDocument(
+    User user, {
+    String? name,
+    String? email,
+  }) async {
+    try {
+      await _firestore.collection('users').doc(user.uid).set({
+        'name': name ?? user.displayName ?? '',
+        'email': email ?? user.email ?? '',
         'createdAt': FieldValue.serverTimestamp(),
-      });
+      }, SetOptions(merge: true));
     } catch (e) {
       print('Warning: Failed to create user document: $e');
     }
-    return cred;
   }
 
   Future<void> signOut() async => await _auth.signOut();

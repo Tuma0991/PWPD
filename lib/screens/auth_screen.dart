@@ -1,6 +1,7 @@
 // lib/screens/auth_screen.dart
 
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/firebase_service.dart';
 
@@ -126,10 +127,25 @@ class _AuthScreenState extends State<AuthScreen>
     }
   }
 
+  Future<void> _loginWithGoogle() async {
+    setState(() => _loading = true);
+    try {
+      await _firebase.signInWithGoogle();
+      // On success the _AuthGate auto-navigates to HomeScreen.
+    } catch (e) {
+      _showError(_parseError(e.toString()));
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
   String _parseError(String error) {
     if (error.contains('user-not-found')) return 'No account found with this email.';
     if (error.contains('wrong-password')) return 'Incorrect password.';
     if (error.contains('email-already-in-use')) return 'Email already registered.';
+    if (error.contains('account-exists-with-different-credential')) {
+      return 'An account already exists with this email. Sign in with your original method.';
+    }
     if (error.contains('invalid-email')) return 'Invalid email address.';
     if (error.contains('network-request-failed')) return 'Network error. Check connection.';
     return 'Something went wrong. Please try again.';
@@ -318,6 +334,41 @@ class _AuthScreenState extends State<AuthScreen>
                         children: [
                           _buildLoginForm(),
                           _buildRegisterForm(),
+                        ],
+                      ),
+                    ),
+
+                    // Google sign-in
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+                      child: Column(
+                        children: [
+                          Row(
+                            children: const [
+                              Expanded(
+                                child: Divider(color: Color(0xFFDDE3F0)),
+                              ),
+                              Padding(
+                                padding: EdgeInsets.symmetric(horizontal: 12),
+                                child: Text(
+                                  'OR',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w700,
+                                    color: Color(0xFF6B7A99),
+                                  ),
+                                ),
+                              ),
+                              Expanded(
+                                child: Divider(color: Color(0xFFDDE3F0)),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          _GoogleButton(
+                            loading: _loading,
+                            onPressed: _loginWithGoogle,
+                          ),
                         ],
                       ),
                     ),
@@ -645,3 +696,59 @@ class _GuardianButton extends StatelessWidget {
     );
   }
 }
+
+class _GoogleButton extends StatelessWidget {
+  final bool loading;
+  final VoidCallback onPressed;
+
+  const _GoogleButton({required this.loading, required this.onPressed});
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 52,
+      child: OutlinedButton(
+        onPressed: loading ? null : onPressed,
+        style: OutlinedButton.styleFrom(
+          foregroundColor: const Color(0xFF1A2340),
+          backgroundColor: Colors.white,
+          side: const BorderSide(color: Color(0xFFDDE3F0), width: 1.5),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        ),
+        child: loading
+            ? const SizedBox(
+                height: 22,
+                width: 22,
+                child: CircularProgressIndicator(
+                  color: Color(0xFF1565C0),
+                  strokeWidth: 2.5,
+                ),
+              )
+            : Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  SvgPicture.string(_googleLogo, width: 20, height: 20),
+                  const SizedBox(width: 10),
+                  const Text(
+                    'Continue with Google',
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF1A2340),
+                    ),
+                  ),
+                ],
+              ),
+      ),
+    );
+  }
+}
+
+const String _googleLogo = '''
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">
+  <path fill="#FFC107" d="M43.611 20.083H42V20H24v8h11.303c-1.649 4.657-6.08 8-11.303 8-6.627 0-12-5.373-12-12s5.373-12 12-12c3.059 0 5.842 1.154 7.961 3.039l5.657-5.657C34.046 6.053 29.268 4 24 4 12.955 4 4 12.955 4 24s8.955 20 20 20 20-8.955 20-20c0-1.341-.138-2.65-.389-3.917z"/>
+  <path fill="#FF3D00" d="M6.306 14.691l6.571 4.819C14.655 15.108 18.961 12 24 12c3.059 0 5.842 1.154 7.961 3.039l5.657-5.657C34.046 6.053 29.268 4 24 4 16.318 4 9.656 8.337 6.306 14.691z"/>
+  <path fill="#4CAF50" d="M24 44c5.166 0 9.86-1.977 13.409-5.192l-6.19-5.238C29.211 35.091 26.715 36 24 36c-5.202 0-9.619-3.317-11.283-7.946l-6.522 5.025C9.505 39.556 16.227 44 24 44z"/>
+  <path fill="#1976D2" d="M43.611 20.083H42V20H24v8h11.303c-.792 2.237-2.231 4.166-4.087 5.571.001-.001.002-.001.003-.002l6.19 5.238C36.971 39.205 44 34 44 24c0-1.341-.138-2.65-.389-3.917z"/>
+</svg>
+''';
