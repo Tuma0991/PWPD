@@ -10,6 +10,7 @@ import '../services/alert_sound_service.dart';
 import '../models/device_data.dart';
 import '../models/paired_device.dart';
 import '../widgets/toast_notification.dart';
+import '../widgets/battery_indicator.dart';
 import '../main.dart'
     show consumePendingInitialMessage, setNotificationTapHandler;
 import 'map_screen.dart';
@@ -971,6 +972,7 @@ class _DashboardTabState extends State<_DashboardTab> with OfflineToastMixin {
           final isOnline = data?.deviceOnline ?? false;
           // Has reported before, but the heartbeat is stale → show last data.
           final isOffline = data != null && data.timestamp > 0 && !isOnline;
+          final batteryPercent = simulatedBatteryPercent(widget.deviceId);
 
           syncOfflineToast(
             offline: isOffline,
@@ -1087,40 +1089,74 @@ class _DashboardTabState extends State<_DashboardTab> with OfflineToastMixin {
                           ],
                         ),
                       ),
-                      // Online badge
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 14, vertical: 8),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.15),
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(
-                              color: Colors.white.withValues(alpha: 0.25)),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Container(
-                              width: 8,
-                              height: 8,
-                              decoration: BoxDecoration(
-                                color: isOnline
-                                    ? const Color(0xFF66BB6A)
-                                    : Colors.white38,
-                                shape: BoxShape.circle,
-                              ),
+                      Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          // Online badge
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 14, vertical: 8),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(
+                                  color: Colors.white.withValues(alpha: 0.25)),
                             ),
-                            const SizedBox(width: 6),
-                            Text(
-                              isOnline ? 'Online' : 'Offline',
-                              style: const TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w700,
-                                color: Colors.white,
-                              ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Container(
+                                  width: 8,
+                                  height: 8,
+                                  decoration: BoxDecoration(
+                                    color: isOnline
+                                        ? const Color(0xFF66BB6A)
+                                        : Colors.white38,
+                                    shape: BoxShape.circle,
+                                  ),
+                                ),
+                                const SizedBox(width: 6),
+                                Text(
+                                  isOnline ? 'Online' : 'Offline',
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w700,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                              ],
                             ),
-                          ],
-                        ),
+                          ),
+                          const SizedBox(height: 8),
+                          // Battery (simulated until the firmware reports a real level)
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 7),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(
+                                  color: Colors.white.withValues(alpha: 0.25)),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(batteryIcon(batteryPercent),
+                                    color: Colors.white, size: 16),
+                                const SizedBox(width: 6),
+                                Text(
+                                  '$batteryPercent%',
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w700,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),

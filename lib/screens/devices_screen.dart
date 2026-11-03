@@ -5,6 +5,7 @@ import '../models/paired_device.dart';
 import '../services/device_config_service.dart';
 import '../services/firebase_service.dart';
 import '../widgets/toast_notification.dart';
+import '../widgets/battery_indicator.dart';
 import 'device_setup_screen.dart';
 
 /// Lists the signed-in user's paired devices and lets them add, switch to,
@@ -264,6 +265,8 @@ class _DeviceTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final subtitle =
         device.wearerName.isNotEmpty ? device.wearerName : device.deviceId;
+    final batteryPercent = simulatedBatteryPercent(device.deviceId);
+    final color = batteryColor(batteryPercent);
     return Material(
       color: Colors.white,
       borderRadius: BorderRadius.circular(16),
@@ -338,6 +341,22 @@ class _DeviceTile extends StatelessWidget {
                     ),
                   ],
                 ),
+              ),
+              const SizedBox(width: 12),
+              Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(batteryIcon(batteryPercent), color: color, size: 20),
+                  const SizedBox(height: 2),
+                  Text(
+                    '$batteryPercent%',
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                      color: color,
+                    ),
+                  ),
+                ],
               ),
               PopupMenuButton<String>(
                 icon: const Icon(Icons.more_vert, color: Color(0xFF9EA8C2)),

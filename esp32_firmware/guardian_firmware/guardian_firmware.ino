@@ -85,8 +85,8 @@ constexpr uint8_t PIN_GPS_RX = 5;      // GPS TX -> ESP32 RX
 constexpr uint8_t PIN_GPS_TX = 6;      // GPS RX <- ESP32 TX (used for UBX commands)
 constexpr uint8_t PIN_SOS    = 4;
 constexpr uint8_t PIN_LED    = 3;
-constexpr uint8_t PIN_SDA    = 8;
-constexpr uint8_t PIN_SCL    = 9;
+constexpr uint8_t PIN_SDA    = 9;
+constexpr uint8_t PIN_SCL    = 8;
 
 // ── CPU frequency (MHz) ─────────────────────────────────────────────────────
 constexpr uint32_t CPU_MHZ_IDLE = 80;  // normal running
@@ -125,6 +125,7 @@ constexpr uint32_t REST_AFTER_MS         = 120000;  // no motion for this long -
 
 // ── GPS duty cycle ──────────────────────────────────────────────────────────
 constexpr bool     GPS_DUTY_CYCLE        = false;   // false = GPS always on (old behaviour)
+constexpr bool     DEMO_LIVE_TRACKING    = true;    // DEMO: stream GPS continuously (skip session/duty gating) so the app can pinpoint the device in real time
 constexpr uint32_t GPS_ACTIVE_INTERVAL_MS   = 60000;   // ACTIVE and geofences configured
 constexpr uint32_t GPS_ACTIVE_NOFENCE_MS    = 300000;  // ACTIVE and no geofences
 constexpr uint32_t GPS_RESTING_INTERVAL_MS  = 900000;  // RESTING (15 min)
@@ -1124,6 +1125,7 @@ static bool gpsFixFresh() {
 }
 
 static bool gpsHoldWanted(uint32_t now) {
+  if (DEMO_LIVE_TRACKING) return true;                  // demo: keep the GPS session open continuously
   if (fallPending) return true;                         // pre-warm during the cancel window
   return emergencyActive && (now - emergencyStartMs) < EMERGENCY_FAST_PHASE_MS;
 }
@@ -1150,7 +1152,7 @@ static bool gpsAcceptFix(uint32_t now) {
   portEXIT_CRITICAL(&fixMux);
 
   float moved = reportedValid ? distanceMeters(reportedLat, reportedLng, f.lat, f.lng) : 1e9f;
-  if (moved >= LOCATION_REPORT_MIN_MOVE_M || locateRequested) {
+  if (DEMO_LIVE_TRACKING || moved >= LOCATION_REPORT_MIN_MOVE_M || locateRequested) {
     reportedLat = f.lat; reportedLng = f.lng; reportedValid = true;
     locationReportPending = true;
   }
@@ -1481,6 +1483,66 @@ static bool sendGeoEvent(const GeoEvent& ev) {
   return dbOk(dbRequest("POST", devBase + "/geofence_violations", body, nullptr));
 }
 
+// ── Push/SMS webhook (Netlify function) ──────────────────────────────────────
+// Turns an emergency/geofence event into FCM push + SMS via the Netlify
+// function. Best-effort only: a failure here never blocks RTDB delivery.
+
+static void notifyWebhook(const char* kind, const String& body) {
+#if defined(NOTIFY_WEBHOOK_URL)
+  if (NOTIFY_WEBHOOK_URL[0] == '\0') return;
+  WiFiClientSecure c;
+  c.setInsecure();
+  HTTPClient h;
+  if (!h.begin(c, NOTIFY_WEBHOOK_URL)) {
+    LOG("[NOTIFY] begin failed\n");
+    return;
+  }
+  h.addHeader("Content-Type", "application/json");
+  int code = h.POST(body);
+  LOG("[NOTIFY] %s -> %d\n", kind, code);
+  h.end();
+#else
+  (void)kind; (void)body;
+#endif
+}
+
+static void notifyEmergencyWebhook() {
+  GpsFix fix = getFix();
+  char reason[sizeof(alertReason)];
+  bool fall;
+  portENTER_CRITICAL(&alertMux);
+  strlcpy(reason, alertReason, sizeof(reason));
+  fall = fallFlag;
+  portEXIT_CRITICAL(&alertMux);
+
+  StaticJsonDocument<384> doc;
+  doc["kind"]     = "emergency";
+  doc["deviceId"] = deviceId;
+  doc["reason"]   = reason;
+  doc["type"]     = fall ? "fall" : "sos";
+  if (fix.valid) {
+    doc["lat"] = fix.lat;
+    doc["lng"] = fix.lng;
+  }
+  String body;
+  serializeJson(doc, body);
+  notifyWebhook("emergency", body);
+}
+
+static void notifyGeoWebhook(const GeoEvent& ev) {
+  StaticJsonDocument<384> doc;
+  doc["kind"]       = "geofence";
+  doc["deviceId"]   = deviceId;
+  doc["type"]       = ev.entered ? "entered" : "exited";
+  doc["name"]       = ev.name;
+  doc["geofenceId"] = ev.id;
+  doc["lat"]        = ev.lat;
+  doc["lng"]        = ev.lng;
+  String body;
+  serializeJson(doc, body);
+  notifyWebhook("geofence", body);
+}
+
 static bool fetchGeofences() {
   String body;
   int code = dbRequest("GET", devBase + "/geofences", "", &body);
@@ -1616,6 +1678,7 @@ static void netTask(void* arg) {
           lastEmgPoll = now;
           lastEmgLoc = now;
           emgSentSeq = getFix().seq;
+          notifyEmergencyWebhook();
           LOG("[NET] Emergency alert delivered\n");
         } else {
           nextAlertTry = now + ALERT_RETRY_MS;
@@ -1649,7 +1712,7 @@ static void netTask(void* arg) {
       if (!failed && geoEvtDue) {
         GeoEvent ev;
         while (xQueuePeek(geoQueue, &ev, 0) == pdTRUE) {
-          if (sendGeoEvent(ev)) xQueueReceive(geoQueue, &ev, 0);
+          if (sendGeoEvent(ev)) { xQueueReceive(geoQueue, &ev, 0); notifyGeoWebhook(ev); }
           else { failed = true; break; }
         }
       }

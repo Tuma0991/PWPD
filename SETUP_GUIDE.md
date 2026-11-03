@@ -1,9 +1,17 @@
 # Guardian ESP32 Wearable App - Complete Setup Guide
 
+> The mobile app is branded **GuardianNako** and the wearable is **GuardianNemo**.
+> Backend: Firebase (Auth + Realtime Database + Firestore + Cloud Functions).
+> Firmware: ESP32-S3 SuperMini, v2.0.0, event-driven.
+
 ## 🔧 What's Configured
 
-✅ **Maps** — free OpenStreetMap (no API key), plus live Guardian tracking and a road-following route to the wearer.  
-✅ **Push notifications** — FCM + Cloud Functions (SOS, fall, geofence breach) with SMS fallback.  
+✅ **Maps** — free OpenStreetMap (no API key), live Guardian tracking, road-following route (OSRM), and the geofence manager (draw / edit / delete polygons).  
+✅ **Push notifications** — FCM + Cloud Functions (SOS, fall, geofence breach) with email-to-SMS fallback.  
+✅ **Auth** — Email/password **and** Google Sign-In, with inline validation, "Remember me" and "Forgot password".  
+✅ **Account settings** — edit display name, change email (verified link), change password (re-authenticated).  
+✅ **Multiple devices** — pair, switch, rename and remove several Guardians from one account.  
+✅ **Alert sound** — bundled tones or a custom audio file for emergency alerts.  
 ✅ **Device settings** — wearer photo + name, and BLE WiFi provisioning.  
 ✅ **Required permissions** — Location, Internet, Network, Bluetooth, Camera, Notifications.
 
@@ -17,6 +25,7 @@ The app uses **OpenStreetMap** with `flutter_map` — free, no API key. The map 
 - The **wearer** (device) marker with their photo (set in Device Settings).
 - The **Guardian's** live location (blue "You" marker).
 - A **road-following route** from Guardian → wearer (OSRM, `driving`/`foot` toggle).
+- **Geofence polygons** — drawn, edited and deleted on the map (no separate tab).
 
 ✅ No sign-ups, payments, or API keys needed.
 
@@ -52,7 +61,13 @@ Private settings live in `secrets.h` (next to the `.ino`); tunables live in sect
 
 3. WiFi credentials are provisioned over BLE from the app (or auto-migrated from v1 NVS keys). There is **no** hardcoded `WIFI_SSID`, `WIFI_PASSWORD`, or `DEVICE_ID` — the device ID is auto-generated as `guardian_<mac>` at boot and stored in NVS.
 
-4. Never commit `secrets.h` — it is already in `.gitignore`.
+4. **v2 extras you get for free:**
+   - Up to **3 saved WiFi networks** (strongest is chosen).
+   - **Hold the button 5 s while powering up** to erase saved WiFi and reopen BLE setup.
+   - Event-driven GPS (duty-cycled) + 100 Hz IMU fall detection with a 15 s "I'm OK" cancel window.
+   - The device only uploads on events + heartbeat, and retries alerts until delivered.
+
+5. Never commit `secrets.h` — it is already in `.gitignore`.
 
 #### B. Get Firebase Realtime Database Secret Token
 
@@ -73,9 +88,11 @@ Private settings live in `secrets.h` (next to the `.ino`); tunables live in sect
 4. `USB CDC On Boot` → **Enabled**.
 5. Baud: `115200`. Upload the sketch.
 
+   Pins (ESP32-S3 SuperMini): MPU6050 I2C `SDA=8 / SCL=9`, GPS `Serial2 RX=5 / TX=6`, SOS button `GPIO 4` (active LOW), status LED `GPIO 2`.
+
 ### STEP 3: Set Up Firebase Realtime Database (RTDB) Rules
 
-The app reads sensor data **and** writes its FCM push token + device ownership, so the rules must allow those nodes.
+The app reads sensor data **and** writes its FCM push token + device ownership + on-demand location commands, so the rules must allow those nodes.
 
 1. Firebase Console → **Realtime Database** → **Rules**.
 2. Replace with:
@@ -90,6 +107,7 @@ The app reads sensor data **and** writes its FCM push token + device ownership, 
         "emergency": { ".write": true },
         "geofences": { ".write": "auth != null" },
         "geofence_violations": { ".write": true },
+        "commands": { ".write": "auth != null" },
         "owner": { ".write": "auth != null" },
         "fcmTokens": {
           "$userId": { ".write": "auth != null && auth.uid === $userId" }
@@ -102,7 +120,7 @@ The app reads sensor data **and** writes its FCM push token + device ownership, 
 
 3. Click **Publish**.
 
-> `sensors` / `emergency` stay open so the ESP32 can write (it authenticates as a service account or via database secret). `fcmTokens` / `owner` are written by the signed-in phone, which is why they require `auth != null`. Keep rules open for capstone testing; tighten before production.
+> `sensors` / `emergency` / `geofence_violations` stay open so the ESP32 can write (it authenticates as a service account or via database secret). `commands`, `owner` and `fcmTokens` are written by the signed-in phone, so they require `auth != null`. `smsCooldowns` is written by the Cloud Function (admin SDK, bypasses rules). Keep rules open for capstone testing; tighten before production.
 
 ### STEP 4: Create Initial Test Data (Optional)
 
@@ -114,7 +132,11 @@ The app reads sensor data **and** writes its FCM push token + device ownership, 
   "accelerometer": { "x": 0.5, "y": 1.2, "z": 9.8 },
   "fallDetected": false,
   "timestamp": {".sv": "timestamp"},
-  "hbIntervalS": 120
+  "hbIntervalS": 120,
+  "mode": "active",
+  "imuOk": true,
+  "rssi": -55,
+  "firmware": "2.0.0"
 }
 ```
 
@@ -132,14 +154,26 @@ flutter pub get
 flutter run
 ```
 
-**Test each screen:**
-- ✅ Dashboard → device data + emergency banner + 3-dots menu (Settings / About Us / Log out)
-- ✅ Map → wearer marker + Guardian "You" marker + driving/walking route toggle
-- ✅ Movement → status hero (Still / Light / Moving / Vigorous / SOS / Fall / Offline)
-- ✅ Alerts → alert history
-- ✅ Geofences → add/edit zones, violations
-- ✅ Contacts → add/edit/delete emergency contacts, tap to call
-- ✅ Settings → Device Settings (photo + name + WiFi) and Language
+**Navigation — 5 bottom tabs** (Dashboard is the center button):
+
+- ✅ **Dashboard** → device data, emergency banner, device switcher (top-right), 3-dots menu
+- ✅ **Map** → wearer marker + Guardian "You" marker + route + geofence draw/edit/delete
+- ✅ **Movement** → fall / movement status
+- ✅ **Alerts** → alert history (SOS, fall, geofence enter/exit)
+- ✅ **Contacts** → add/edit/delete emergency contacts, tap to call
+
+**Settings (Dashboard 3-dots → Settings):**
+
+- ✅ **Account** → display name, email, password
+- ✅ **Device Settings** → wearer photo + name + device setup
+- ✅ **Devices** → add / switch / rename / remove paired devices
+- ✅ **Language** → English / Filipino toggle
+- ✅ **Alert sound** → bundled tones + custom file
+
+**Auth screen:**
+
+- ✅ Sign In / Register (inline field validation, "Remember me", "Forgot password")
+- ✅ **Continue with Google**
 
 ### STEP 6: Enable Push Notifications (Works When App Is Closed)
 
@@ -163,7 +197,7 @@ firebase deploy --only functions
 
 #### 6.3 (Optional) SMS fallback secrets
 
-Push works without this. For email-to-SMS alerts to emergency contacts:
+Push works without this. For email-to-SMS alerts to emergency contacts (gateways include Globe / Smart / Sun / DITO and US carriers):
 
 ```powershell
 firebase functions:secrets:set EMAIL_USER
@@ -180,7 +214,7 @@ iOS push requires the **Apple Developer Program ($99/yr)**. Upload the APNs `.p8
 
 #### 6.6 Test with the app closed
 
-1. Pair a device in the app (registers the phone's FCM token at `devices/{id}/fcmTokens/{uid}`).
+1. Pair a device in the app (registers the phone's FCM token at `devices/{id}/fcmTokens/{uid}` for **every** paired device).
 2. Force-close the app (swipe it away from recents).
 3. Trigger an alert — write to RTDB:
 
@@ -191,6 +225,13 @@ iOS push requires the **Apple Developer Program ($99/yr)**. Upload the APNs `.p8
 4. A system notification with sound should appear within ~1–3 s even though the app is dead.
 
 **Why it works when closed:** the Cloud Function sends a *notification* message (has a `notification` block), so the OS displays it without the app running. A `FirebaseMessaging.onBackgroundMessage` handler is **not** needed for notification messages — only for data-only messages.
+
+### STEP 7: Enable Google Sign-In (Optional)
+
+1. Firebase Console → **Authentication** → **Sign-in method** → enable **Google**.
+2. Add your Android app's **SHA-1** fingerprint: Firebase Console → Project settings → your Android app → **Add fingerprint**.
+   - Get it with: `cd android && ./gradlew signingReport` (look for `SHA1` under the debug/upload config).
+3. Rebuild. If Google sign-in fails with a config error, the SHA-1 is usually missing.
 
 ---
 
@@ -209,7 +250,8 @@ iOS push requires the **Apple Developer Program ($99/yr)**. Upload the APNs `.p8
     │  /devices/guardian_<mac>   │
     │  ├── sensors (GPS, accel)  │
     │  ├── emergency (alert)     │
-    │  └── ...                   │
+    │  ├── geofence_violations   │
+    │  └── commands/locateNow    │
     └──────┬──────────────┬──────┘
            │              │ (Cloud Function watches)
            │              ▼
@@ -231,6 +273,7 @@ iOS push requires the **Apple Developer Program ($99/yr)**. Upload the APNs `.p8
 - **Firebase is the hub** — all communication goes through RTDB.
 - **No direct device↔phone connection** except one-time BLE provisioning.
 - **Notifications** are triggered server-side by Cloud Functions, so they arrive even when the app is closed.
+- **One account can own many devices** — each paired device gets its own FCM token registration.
 
 ---
 
@@ -263,6 +306,11 @@ iOS push requires the **Apple Developer Program ($99/yr)**. Upload the APNs `.p8
 3. Phone has internet.
 4. `google-services.json` / `GoogleService-Info.plist` present.
 
+### "Google sign-in fails"
+1. Google provider enabled in Firebase Authentication.
+2. App **SHA-1** fingerprint added (Project settings → Android app).
+3. See Step 7.
+
 ### "GPS shows 0.0, 0.0"
 1. GPS needs clear sky (5–10 min outdoor for first lock).
 2. Check GT-U8 wiring: TX → `PIN_GPS_RX` (GPIO 5), RX → `PIN_GPS_TX` (GPIO 6).
@@ -277,27 +325,33 @@ lib/
 ├── main.dart                       # Entry point, FCM setup, auth routing
 ├── theme.dart                      # Blue & white theme (#1565C0)
 ├── services/
-│   ├── firebase_service.dart       # Auth, RTDB streams, Firestore CRUD, FCM token
-│   ├── device_config_service.dart  # Paired-device persistence
+│   ├── firebase_service.dart       # Auth (email/Google), RTDB streams, Firestore CRUD, FCM token, multi-device
+│   ├── device_config_service.dart  # Active-device selection + legacy migration
 │   ├── ble_service.dart            # BLE WiFi provisioning
 │   ├── language_service.dart       # English / Filipino toggle
-│   └── routing_service.dart        # OSRM road-following route
+│   ├── routing_service.dart        # OSRM road-following route
+│   └── alert_sound_service.dart    # Alert tone (bundled/custom) selection
 ├── models/
 │   ├── device_data.dart            # GPS + accelerometer + heartbeat
 │   ├── contact_model.dart          # Emergency contacts (+ carrier gateways)
 │   ├── geofence_model.dart         # Geofence zones
-│   └── device_settings_model.dart  # Wearer photo + name
+│   ├── device_settings_model.dart  # Wearer photo + name
+│   ├── paired_device.dart          # Paired device list item
+│   └── alert_sound.dart            # Alert sound models
 ├── widgets/
 │   └── toast_notification.dart     # Toast + offline banner mixin
 └── screens/
-    ├── auth_screen.dart            # Login / Register
-    ├── home_screen.dart            # Dashboard + bottom-nav tabs + settings menu
-    ├── map_screen.dart             # Live GPS map, Guardian tracking, route
+    ├── auth_screen.dart            # Login / Register / Google Sign-In
+    ├── home_screen.dart            # 5-tab shell + settings menu + emergency dialog
+    ├── map_screen.dart             # Live GPS map + geofence manager + route
     ├── fall_detection_screen.dart  # Movement / fall status
     ├── alerts_screen.dart          # Alert history
     ├── contacts_screen.dart        # Emergency contacts
+    ├── devices_screen.dart         # Multi-device management
     ├── device_setup_screen.dart    # BLE WiFi setup
-    └── device_settings_screen.dart # Wearer photo, name, WiFi
+    ├── device_settings_screen.dart # Wearer photo, name, WiFi
+    ├── account_settings_screen.dart# Account name/email/password
+    └── alert_sound_screen.dart     # Alert sound picker
 ```
 
 Cloud Functions live in `functions/index.js` (`onEmergency`, `onGeofenceViolation`).
@@ -307,7 +361,11 @@ Cloud Functions live in `functions/index.js` (`onEmergency`, `onGeofenceViolatio
 ## 🚀 Already Implemented (no setup needed)
 
 - **Device pairing** — automatic via BLE provisioning; no manual device ID.
-- **Settings menu** — 3-dots → Settings / About Us / Log out → Device Settings + Language.
+- **Multiple devices** — add / switch / rename / remove from Settings → Devices (or the dashboard switcher).
+- **Google Sign-In** — one-tap auth alongside email/password.
+- **Account settings** — name, email (verified change) and password (re-auth required).
+- **Alert sound** — bundled tones + custom audio, played on emergency.
+- **Geofence manager** — draw / edit / delete polygons on the Map screen.
 - **Guardian live location + routing** — `geolocator` stream + OSRM route.
 - **Wearer photo** — stored as base64 in Firestore, shown on map + dashboard.
 
@@ -318,6 +376,7 @@ Cloud Functions live in `functions/index.js` (`onEmergency`, `onGeofenceViolatio
 - **Keep Firebase rules OPEN for testing** (tighten for production).
 - **Never commit secrets** — `secrets.h`, `.env`, `google-services.json` keys stay gitignored.
 - **Cloud Functions need Blaze** (free tier is enough for a demo).
+- **Google Sign-In needs the app SHA-1** registered in the Firebase console.
 - Document all API keys in a `.env` file (add to `.gitignore`).
 
 ---

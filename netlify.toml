@@ -1,0 +1,8 @@
+# Netlify config — functions only (the Flutter mobile app does not need a web build).
+# The ESP32 POSTs to /.netlify/functions/notify on emergency/geofence events.
+
+[build]
+  publish = "."
+
+[functions]
+  directory = "netlify/functions"
