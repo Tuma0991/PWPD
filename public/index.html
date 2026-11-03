@@ -3,42 +3,48 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Guardian — Peace of Mind for the People You Love</title>
-    <meta name="description" content="Guardian is a wearable protection device that detects falls and emergencies in real time, then instantly alerts your trusted contacts with live location." />
+    <title>GuardianNako — Peace of Mind for the People You Love</title>
+    <meta name="description" content="GuardianNako is a wearable safety companion with the GuardianNemo device — real-time fall detection, GPS tracking and instant emergency alerts to your trusted contacts." />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet" />
     <style>
       :root {
-        --primary: #1565c0;
-        --primary-dark: #0d47a1;
-        --primary-deep: #0a3a7a;
-        --accent: #e3f2fd;
-        --danger: #d32f2f;
-        --text: #10243e;
-        --muted: #4b5f73;
-        --bg: #ffffff;
-        --bg-soft: #f4f8fc;
+        /* ── App brand colours (from lib/theme.dart) ── */
+        --primary: #1565C0;        /* Deep Blue */
+        --primary-dark: #0D47A1;   /* Pressed / gradients */
+        --primary-light: #1E88E5;  /* Medium Blue */
+        --accent: #0288D1;         /* Sky Blue */
+        --danger: #D32F2F;         /* SOS / fall ONLY */
+        --success: #2E7D32;        /* Normal / online */
+        --warning: #F57C00;        /* Caution */
+        --geofence: #7C4DFF;       /* Zone alerts */
+        --background: #F0F4FF;     /* App scaffold background */
+        --surface: #FFFFFF;
+        --text: #1A2340;
+        --text-secondary: #5C6B7A;
+        --text-muted: #6B7A99;
+        --card-shadow: rgba(21, 101, 192, 0.10);
         --border: #e2eaf3;
         --radius: 16px;
-        --shadow: 0 10px 30px rgba(13, 71, 161, 0.10);
       }
       * { box-sizing: border-box; margin: 0; padding: 0; }
       html { scroll-behavior: smooth; }
       body {
         font-family: "Nunito", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
         color: var(--text);
-        background: var(--bg);
+        background: var(--background);
         line-height: 1.6;
         -webkit-font-smoothing: antialiased;
       }
-      .container { max-width: 1040px; margin: 0 auto; padding: 0 24px; }
+      .container { max-width: 1080px; margin: 0 auto; padding: 0 24px; }
+      .logo { border-radius: 10px; display: block; object-fit: cover; }
 
       /* ── Buttons ── */
       .btn {
         display: inline-flex; align-items: center; gap: 10px;
         background: var(--primary); color: #fff; text-decoration: none;
-        font-weight: 800; font-size: 1rem; padding: 14px 28px; border-radius: 999px;
+        font-weight: 800; font-size: 1rem; padding: 14px 28px; border-radius: 12px;
         box-shadow: 0 8px 24px rgba(21, 101, 192, 0.32);
         transition: background .15s ease, transform .06s ease, box-shadow .15s ease;
       }
@@ -46,7 +52,7 @@
       .btn:active { transform: translateY(1px); }
       .btn svg { width: 18px; height: 18px; }
       .btn.ghost { background: transparent; color: var(--primary); box-shadow: none; border: 2px solid var(--primary); }
-      .btn.ghost:hover { background: var(--accent); }
+      .btn.ghost:hover { background: var(--background); }
 
       /* ── Header / nav ── */
       nav {
@@ -55,28 +61,24 @@
         border-bottom: 1px solid var(--border);
       }
       nav .container { display: flex; align-items: center; justify-content: space-between; height: 68px; }
-      .brand { display: flex; align-items: center; gap: 10px; font-weight: 900; font-size: 1.25rem; color: var(--primary-dark); }
-      .logo { width: 38px; height: 38px; border-radius: 10px; display: block; object-fit: cover; }
+      .brand { display: flex; align-items: center; gap: 10px; font-weight: 900; font-size: 1.22rem; color: var(--primary-dark); }
+      .brand .logo { width: 36px; height: 36px; }
+      .brand small { display: block; font-size: 0.7rem; font-weight: 700; color: var(--text-muted); letter-spacing: .04em; }
       nav .btn { padding: 10px 20px; font-size: 0.92rem; }
 
       /* ── Hero ── */
       .hero {
-        position: relative; overflow: hidden;
-        background: linear-gradient(150deg, var(--primary-deep) 0%, var(--primary-dark) 45%, var(--primary) 100%);
-        color: #fff; padding: 88px 0 96px;
+        position: relative; overflow: hidden; color: #fff;
+        background: linear-gradient(135deg, var(--primary-dark) 0%, var(--primary) 45%, var(--primary-light) 100%);
+        padding: 80px 0 96px;
       }
       .hero::before, .hero::after {
-        content: ""; position: absolute; border-radius: 50%; filter: blur(60px); opacity: .35;
+        content: ""; position: absolute; border-radius: 50%; filter: blur(70px); opacity: .30;
       }
-      .hero::before { width: 420px; height: 420px; background: #4fc3f7; top: -140px; right: -100px; }
-      .hero::after { width: 360px; height: 360px; background: #90caf9; bottom: -160px; left: -80px; }
+      .hero::before { width: 460px; height: 460px; background: #4fc3f7; top: -160px; right: -120px; }
+      .hero::after { width: 380px; height: 380px; background: #90caf9; bottom: -180px; left: -100px; }
       .hero .container { position: relative; z-index: 1; }
-      .hero-grid { display: grid; grid-template-columns: 1.05fr 0.95fr; gap: 44px; align-items: center; }
-      .hero-device img {
-        width: 100%; max-width: 460px; margin: 0 auto; display: block;
-        border-radius: 22px; background: #fff; border: 1px solid rgba(255,255,255,0.28);
-        box-shadow: 0 26px 60px rgba(0,0,0,0.35);
-      }
+      .hero-grid { display: grid; grid-template-columns: 1.05fr 0.95fr; gap: 48px; align-items: center; }
       .hero .eyebrow {
         display: inline-flex; align-items: center; gap: 8px;
         background: rgba(255,255,255,0.14); border: 1px solid rgba(255,255,255,0.25);
@@ -84,58 +86,106 @@
         letter-spacing: 0.02em; margin-bottom: 22px;
       }
       .hero h1 {
-        font-size: clamp(2.2rem, 5.5vw, 3.6rem); font-weight: 900; line-height: 1.08;
+        font-size: clamp(2.2rem, 5.5vw, 3.5rem); font-weight: 900; line-height: 1.08;
         letter-spacing: -0.02em; max-width: 15ch;
       }
       .hero h1 span { color: #90caf9; }
-      .hero .lead { font-size: 1.18rem; max-width: 52ch; margin-top: 18px; color: rgba(255,255,255,0.92); }
-      .hero .actions { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 32px; }
+      .hero .lead { font-size: 1.16rem; max-width: 52ch; margin-top: 18px; color: rgba(255,255,255,0.92); }
+      .hero .actions { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 30px; }
       .hero .actions .btn { background: #fff; color: var(--primary-dark); box-shadow: 0 10px 30px rgba(0,0,0,0.18); }
-      .hero .actions .btn:hover { background: var(--accent); }
+      .hero .actions .btn:hover { background: #e3f2fd; }
       .hero .actions .btn.ghost { background: transparent; color: #fff; border-color: rgba(255,255,255,0.5); }
       .hero .actions .btn.ghost:hover { background: rgba(255,255,255,0.12); }
-      .hero .stats { display: flex; flex-wrap: wrap; gap: 28px; margin-top: 44px; }
-      .hero .stat .num { font-size: 1.6rem; font-weight: 900; }
-      .hero .stat .lbl { font-size: 0.85rem; color: rgba(255,255,255,0.78); }
+      .hero .stats { display: flex; flex-wrap: wrap; gap: 28px; margin-top: 40px; }
+      .hero .stat .num { font-size: 1.55rem; font-weight: 900; }
+      .hero .stat .lbl { font-size: 0.84rem; color: rgba(255,255,255,0.78); }
+      .hero-device { position: relative; }
+      .hero-device img {
+        width: 100%; max-width: 460px; margin: 0 auto; display: block;
+        border-radius: 22px; background: #fff; border: 1px solid rgba(255,255,255,0.28);
+        box-shadow: 0 26px 60px rgba(0,0,0,0.35);
+      }
+      .hero-device .tag {
+        position: absolute; bottom: -14px; left: 50%; transform: translateX(-50%);
+        background: #fff; color: var(--primary); font-weight: 800; font-size: 0.82rem;
+        padding: 8px 18px; border-radius: 999px; box-shadow: 0 10px 24px rgba(0,0,0,0.18);
+        white-space: nowrap;
+      }
 
       /* ── Sections ── */
-      section { padding: 72px 0; }
-      .section-head { text-align: center; max-width: 640px; margin: 0 auto 44px; }
-      .section-head h2 { font-size: clamp(1.7rem, 3.5vw, 2.3rem); font-weight: 900; letter-spacing: -0.01em; }
-      .section-head p { color: var(--muted); margin-top: 12px; font-size: 1.05rem; }
+      section { padding: 76px 0; }
+      .section-head { text-align: center; max-width: 680px; margin: 0 auto 46px; }
+      .section-head .kicker { color: var(--primary); font-weight: 800; font-size: 0.82rem; letter-spacing: .08em; text-transform: uppercase; }
+      .section-head h2 { font-size: clamp(1.7rem, 3.5vw, 2.3rem); font-weight: 900; letter-spacing: -0.01em; margin-top: 8px; }
+      .section-head p { color: var(--text-secondary); margin-top: 12px; font-size: 1.05rem; }
 
       /* ── Feature grid ── */
       .features { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 18px; }
       .feature {
-        background: #fff; border: 1px solid var(--border); border-radius: var(--radius);
-        padding: 26px 24px; box-shadow: var(--shadow); transition: transform .12s ease;
+        background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+        padding: 26px 24px; box-shadow: 0 10px 30px var(--card-shadow); transition: transform .12s ease;
       }
       .feature:hover { transform: translateY(-3px); }
       .feature .icon {
         width: 48px; height: 48px; border-radius: 12px; display: grid; place-items: center;
-        background: var(--accent); color: var(--primary); margin-bottom: 16px;
+        margin-bottom: 16px;
       }
       .feature .icon svg { width: 24px; height: 24px; }
       .feature h3 { font-size: 1.08rem; font-weight: 800; margin-bottom: 6px; }
-      .feature p { color: var(--muted); font-size: 0.95rem; }
+      .feature p { color: var(--text-secondary); font-size: 0.95rem; }
+      .tint-blue   { background: rgba(21,101,192,0.10); color: var(--primary); }
+      .tint-red    { background: rgba(211,47,47,0.10);  color: var(--danger); }
+      .tint-green  { background: rgba(46,125,50,0.10);  color: var(--success); }
+      .tint-purple { background: rgba(124,77,255,0.10); color: var(--geofence); }
+      .tint-orange { background: rgba(245,124,0,0.10);  color: var(--warning); }
 
-      /* ── How it works ── */
-      .how { background: var(--bg-soft); }
-      .steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 18px; }
-      .step { background: #fff; border: 1px solid var(--border); border-radius: var(--radius); padding: 28px 24px; position: relative; }
+      /* ── App preview (5 tabs) ── */
+      .app-band { background: var(--primary-dark); color: #fff; }
+      .app-band .section-head h2 { color: #fff; }
+      .app-band .section-head p { color: rgba(255,255,255,0.8); }
+      .tabs { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; margin-bottom: 32px; }
+      .tab {
+        display: flex; align-items: center; gap: 8px; background: rgba(255,255,255,0.1);
+        border: 1px solid rgba(255,255,255,0.2); color: #fff; font-weight: 700; font-size: 0.9rem;
+        padding: 10px 18px; border-radius: 999px;
+      }
+      .tab svg { width: 18px; height: 18px; }
+      .tab.center { background: #fff; color: var(--primary); border-color: #fff; }
+      .app-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 16px; }
+      .app-item { background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.14); border-radius: var(--radius); padding: 22px; }
+      .app-item h4 { font-size: 1rem; font-weight: 800; margin-bottom: 6px; display: flex; align-items: center; gap: 8px; }
+      .app-item p { font-size: 0.9rem; color: rgba(255,255,255,0.8); }
+
+      /* ── Emergency flow ── */
+      .how { background: var(--surface); }
+      .flow { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 18px; }
+      .flow-step { border-radius: var(--radius); padding: 26px 24px; border: 1px solid var(--border); background: var(--background); position: relative; }
+      .flow-step .badge {
+        display: inline-block; font-size: 0.72rem; font-weight: 800; letter-spacing: .06em; text-transform: uppercase;
+        padding: 4px 12px; border-radius: 999px; margin-bottom: 14px;
+      }
+      .flow-step h3 { font-size: 1.05rem; font-weight: 800; margin-bottom: 6px; }
+      .flow-step p { color: var(--text-secondary); font-size: 0.93rem; }
+      .badge.sos  { background: rgba(211,47,47,0.12);  color: var(--danger); }
+      .badge.fall { background: rgba(245,124,0,0.14);  color: var(--warning); }
+      .badge.safe { background: rgba(46,125,50,0.12);  color: var(--success); }
+
+      /* ── Setup steps ── */
+      .setup { background: var(--background); }
+      .steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 18px; }
+      .step { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 28px 24px; position: relative; }
       .step .num {
-        width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center;
-        background: var(--primary); color: #fff; font-weight: 900; font-size: 1.1rem; margin-bottom: 14px;
+        width: 42px; height: 42px; border-radius: 50%; display: grid; place-items: center;
+        background: linear-gradient(135deg, var(--primary-light), var(--primary-dark));
+        color: #fff; font-weight: 900; font-size: 1.1rem; margin-bottom: 14px;
       }
       .step h3 { font-size: 1.05rem; font-weight: 800; margin-bottom: 6px; }
-      .step p { color: var(--muted); font-size: 0.95rem; }
+      .step p { color: var(--text-secondary); font-size: 0.93rem; }
 
       /* ── Audience ── */
       .audience { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 18px; }
-      .card {
-        border-radius: var(--radius); padding: 30px 26px; color: #fff;
-        background: linear-gradient(150deg, var(--primary-dark), var(--primary));
-      }
+      .card { border-radius: var(--radius); padding: 30px 26px; color: #fff; }
+      .card:nth-child(1) { background: linear-gradient(150deg, var(--primary-dark), var(--primary)); }
       .card:nth-child(2) { background: linear-gradient(150deg, #00695c, #00897b); }
       .card:nth-child(3) { background: linear-gradient(150deg, #6a1b9a, #8e24aa); }
       .card h3 { font-size: 1.15rem; font-weight: 900; margin-bottom: 8px; }
@@ -144,21 +194,21 @@
       /* ── Final CTA ── */
       .cta {
         position: relative; overflow: hidden; color: #fff; text-align: center;
-        background: linear-gradient(150deg, var(--primary-deep), var(--primary-dark));
+        background: linear-gradient(150deg, var(--primary-dark), var(--primary-light));
       }
       .cta h2 { font-size: clamp(1.8rem, 4vw, 2.5rem); font-weight: 900; }
       .cta p { color: rgba(255,255,255,0.9); margin: 14px auto 30px; max-width: 52ch; }
       .cta .btn { background: #fff; color: var(--primary-dark); box-shadow: 0 10px 30px rgba(0,0,0,0.2); }
-      .cta .btn:hover { background: var(--accent); }
+      .cta .btn:hover { background: #e3f2fd; }
 
-      footer { border-top: 1px solid var(--border); padding: 32px 0; text-align: center; color: var(--muted); font-size: 0.88rem; }
+      footer { border-top: 1px solid var(--border); background: var(--surface); padding: 36px 0; text-align: center; color: var(--text-muted); font-size: 0.88rem; }
       footer .container { display: flex; flex-direction: column; gap: 6px; align-items: center; }
-      footer .logo { width: 44px; height: 44px; border-radius: 12px; margin-bottom: 4px; }
+      footer .logo { width: 44px; height: 44px; margin-bottom: 6px; }
 
       @media (max-width: 600px) {
         section { padding: 52px 0; }
-        .hero { padding: 60px 0 68px; }
-        .hero-grid { grid-template-columns: 1fr; gap: 34px; }
+        .hero { padding: 56px 0 72px; }
+        .hero-grid { grid-template-columns: 1fr; gap: 36px; }
         .hero-device img { max-width: 340px; }
       }
     </style>
@@ -167,8 +217,8 @@
     <nav>
       <div class="container">
         <div class="brand">
-          <img class="logo" src="images/logo.png" alt="Guardian logo" />
-          Guardian
+          <img class="logo" src="images/logo.png" alt="GuardianNako logo" />
+          <span>GuardianNako<small>GuardianNemo wearable</small></span>
         </div>
         <a class="btn" href="https://github.com/Tuma0991/PWPD/releases/latest/download/GuardianNako.apk">Download</a>
       </div>
@@ -177,27 +227,28 @@
     <header class="hero">
       <div class="container hero-grid">
         <div class="hero-copy">
-        <span class="eyebrow">Real-time safety &middot; Fall detection &middot; GPS tracking</span>
-        <h1>Peace of mind, <span>wherever they go.</span></h1>
-        <p class="lead">
-          Guardian is a wearable that watches over the people you love — and tells you
-          the very moment they need help.
-        </p>
-        <div class="actions">
-          <a class="btn" href="https://github.com/Tuma0991/PWPD/releases/latest/download/GuardianNako.apk">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-            Download for Android
-          </a>
-          <a class="btn ghost" href="#how">How it works</a>
-        </div>
-        <div class="stats">
-          <div class="stat"><div class="num">24/7</div><div class="lbl">Always watching over</div></div>
-          <div class="stat"><div class="num">Instant</div><div class="lbl">Push + SMS alerts</div></div>
-          <div class="stat"><div class="num">Live</div><div class="lbl">GPS location</div></div>
-        </div>
+          <span class="eyebrow">Fall detection &middot; GPS tracking &middot; Instant alerts</span>
+          <h1>Peace of mind, <span>wherever they go.</span></h1>
+          <p class="lead">
+            GuardianNako pairs with the GuardianNemo wearable to watch over the people
+            you love — and tells you the very moment they need help.
+          </p>
+          <div class="actions">
+            <a class="btn" href="https://github.com/Tuma0991/PWPD/releases/latest/download/GuardianNako.apk">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              Download for Android
+            </a>
+            <a class="btn ghost" href="#how">How it works</a>
+          </div>
+          <div class="stats">
+            <div class="stat"><div class="num">24/7</div><div class="lbl">Always watching over</div></div>
+            <div class="stat"><div class="num">Instant</div><div class="lbl">Push + SMS alerts</div></div>
+            <div class="stat"><div class="num">Live</div><div class="lbl">GPS location</div></div>
+          </div>
         </div>
         <div class="hero-device">
-          <img src="images/device.jpg" alt="The Guardian wearable protection device" />
+          <img src="images/device.jpg" alt="The GuardianNemo wearable protection device" />
+          <span class="tag">GuardianNemo wearable</span>
         </div>
       </div>
     </header>
@@ -205,37 +256,38 @@
     <section id="features">
       <div class="container">
         <div class="section-head">
+          <span class="kicker">What it does</span>
           <h2>Everything you need to keep them safe</h2>
-          <p>Guardian turns a small wearable into a safety net for the people you care about most.</p>
+          <p>GuardianNako turns the small GuardianNemo wearable into a safety net for the people you care about most.</p>
         </div>
         <div class="features">
           <div class="feature">
-            <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/></svg></div>
+            <div class="icon tint-orange"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/></svg></div>
             <h3>Automatic Fall Detection</h3>
-            <p>On-device sensors detect a fall the instant it happens — no button press needed.</p>
+            <p>A 100 Hz sensor monitors movement patterns and detects a fall the instant it happens — no button press needed. A 15-second &ldquo;I&rsquo;m OK&rdquo; window cancels false alarms.</p>
           </div>
           <div class="feature">
-            <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg></div>
+            <div class="icon tint-red"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg></div>
             <h3>One-Tap SOS Button</h3>
-            <p>A long press sends an urgent alert to every emergency contact, instantly.</p>
+            <p>A long press on the device sends an urgent SOS alert to every emergency contact at the same time.</p>
           </div>
           <div class="feature">
-            <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg></div>
+            <div class="icon tint-blue"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg></div>
             <h3>Live GPS Tracking</h3>
-            <p>See their real-time location on a map, right from your phone.</p>
+            <p>See their real-time location on a map and follow a road route straight to them.</p>
           </div>
           <div class="feature">
-            <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 22V12h6v10"/></svg></div>
+            <div class="icon tint-purple"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 22V12h6v10"/></svg></div>
             <h3>Safe-Zone Alerts</h3>
-            <p>Set a boundary and get notified the moment they leave it.</p>
+            <p>Draw a boundary on the map and get notified the moment they leave it.</p>
           </div>
           <div class="feature">
-            <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></div>
+            <div class="icon tint-red"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></div>
             <h3>Instant Emergency Alerts</h3>
-            <p>Push notification and SMS to every trusted contact at the same time.</p>
+            <p>Push notification and SMS to every trusted contact — even when the app is closed.</p>
           </div>
           <div class="feature">
-            <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
+            <div class="icon tint-green"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
             <h3>Monitor Multiple Devices</h3>
             <p>Keep an eye on every family member from one account.</p>
           </div>
@@ -243,26 +295,83 @@
       </div>
     </section>
 
+    <section class="app-band" id="app">
+      <div class="container">
+        <div class="section-head">
+          <span class="kicker" style="color:#90caf9">Inside the app</span>
+          <h2>Five simple tabs, one clear picture</h2>
+          <p>Everything lives in one place — your loved one&rsquo;s status, location, alerts and contacts.</p>
+        </div>
+        <div class="tabs">
+          <span class="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 6v12l9-6 9 6V6l-9-6z"/></svg> Map</span>
+          <span class="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a10 10 0 0 1 10 10"/><path d="M12 2a10 10 0 0 0 10 10"/></svg> Movement</span>
+          <span class="tab center"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg> Dashboard</span>
+          <span class="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/></svg> Alerts</span>
+          <span class="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg> Contacts</span>
+        </div>
+        <div class="app-cols">
+          <div class="app-item"><h4>Dashboard</h4><p>Device status at a glance — GPS, movement, connectivity and online badge.</p></div>
+          <div class="app-item"><h4>Map</h4><p>Wearer marker, your location, a road route, and geofence draw / edit / delete.</p></div>
+          <div class="app-item"><h4>Movement</h4><p>Live fall and movement status straight from the wearable&rsquo;s sensors.</p></div>
+          <div class="app-item"><h4>Alerts</h4><p>A history of every SOS, fall and geofence enter / exit event.</p></div>
+          <div class="app-item"><h4>Contacts</h4><p>Add, edit and remove emergency contacts — tap any name to call.</p></div>
+        </div>
+      </div>
+    </section>
+
     <section class="how" id="how">
       <div class="container">
         <div class="section-head">
+          <span class="kicker">When it matters</span>
+          <h2>What happens in an emergency</h2>
+          <p>GuardianNako acts on its own, then keeps you in the loop until your loved one is safe.</p>
+        </div>
+        <div class="flow">
+          <div class="flow-step">
+            <span class="badge sos">SOS</span>
+            <h3>One long press</h3>
+            <p>They hold the button on the GuardianNemo to trigger an urgent alert immediately.</p>
+          </div>
+          <div class="flow-step">
+            <span class="badge fall">Fall</span>
+            <h3>A fall is detected</h3>
+            <p>Sensors catch a hard fall automatically. A 15-second countdown lets them cancel if they&rsquo;re okay.</p>
+          </div>
+          <div class="flow-step">
+            <span class="badge safe">Mark as safe</span>
+            <h3>You&rsquo;re notified</h3>
+            <p>Every contact gets a push + SMS with the live location. Tap &ldquo;Mark as Safe&rdquo; once they&rsquo;re confirmed okay.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="setup" id="setup">
+      <div class="container">
+        <div class="section-head">
+          <span class="kicker">Getting started</span>
           <h2>Set up in minutes, peace of mind forever</h2>
         </div>
         <div class="steps">
           <div class="step">
             <div class="num">1</div>
-            <h3>Wear the device</h3>
-            <p>Small and comfortable, it goes wherever they go.</p>
+            <h3>Download &amp; sign in</h3>
+            <p>Install the app and create an account with email/password or Google.</p>
           </div>
           <div class="step">
             <div class="num">2</div>
-            <h3>Pair it with the app</h3>
-            <p>Connect over Bluetooth and add your emergency contacts.</p>
+            <h3>Pair the wearable</h3>
+            <p>Turn on the GuardianNemo and connect over Bluetooth — WiFi is set up automatically.</p>
           </div>
           <div class="step">
             <div class="num">3</div>
-            <h3>You're covered</h3>
-            <p>If anything happens, you'll know instantly — with their location.</p>
+            <h3>Add emergency contacts</h3>
+            <p>Choose who gets the call, push and SMS when something happens.</p>
+          </div>
+          <div class="step">
+            <div class="num">4</div>
+            <h3>You&rsquo;re protected</h3>
+            <p>Fall detection, SOS, GPS tracking and safe-zone alerts are all live.</p>
           </div>
         </div>
       </div>
@@ -271,6 +380,7 @@
     <section id="who">
       <div class="container">
         <div class="section-head">
+          <span class="kicker">Who it&rsquo;s for</span>
           <h2>Built for the people you love</h2>
         </div>
         <div class="audience">
@@ -293,7 +403,7 @@
     <section class="cta" id="download">
       <div class="container">
         <h2>Protect what matters most.</h2>
-        <p>Download the Guardian app and pair it with a device today.</p>
+        <p>Download the GuardianNako app and pair it with a GuardianNemo device today.</p>
         <a class="btn" href="https://github.com/Tuma0991/PWPD/releases/latest/download/GuardianNako.apk">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
           Download for Android
@@ -303,8 +413,8 @@
 
     <footer>
       <div class="container">
-        <img class="logo" src="images/logo.png" alt="Guardian logo" />
-        <span>Guardian &middot; IoT Wearable Protection Device</span>
+        <img class="logo" src="images/logo.png" alt="GuardianNako logo" />
+        <span>GuardianNako &middot; IoT Wearable Protection Device</span>
         <span>Real-time safety for the people you love.</span>
       </div>
     </footer>
