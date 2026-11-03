@@ -2,7 +2,9 @@
 # The ESP32 POSTs to /.netlify/functions/notify on emergency/geofence events.
 
 [build]
-  publish = "."
+  command = "npm install"
+  publish = "public"
 
 [functions]
   directory = "netlify/functions"
+  external_node_modules = ["firebase-admin", "nodemailer"]

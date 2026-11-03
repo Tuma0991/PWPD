@@ -1,5 +1,5 @@
 {
-  "name": "guardian-netlify-functions",
+  "name": "guardian-netlify",
   "private": true,
   "engines": {
     "node": "22"
