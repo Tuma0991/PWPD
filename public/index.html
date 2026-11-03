@@ -2,10 +2,127 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <title>Guardian Notifications</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Guardian — IoT Wearable Protection Device</title>
+    <style>
+      :root {
+        --primary: #1565c0;
+        --primary-dark: #0d47a1;
+        --danger: #d32f2f;
+        --text: #1f2933;
+        --muted: #52606d;
+        --bg: #f5f7fa;
+      }
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        color: var(--text);
+        background: var(--bg);
+        line-height: 1.6;
+      }
+      header {
+        background: linear-gradient(135deg, var(--primary-dark), var(--primary));
+        color: #fff;
+        padding: 56px 24px;
+        text-align: center;
+      }
+      header h1 { font-size: 2.4rem; font-weight: 800; letter-spacing: -0.5px; }
+      header p.tagline { font-size: 1.15rem; opacity: 0.92; margin-top: 8px; }
+      .container { max-width: 860px; margin: 0 auto; padding: 40px 24px; }
+      .intro { font-size: 1.05rem; color: var(--muted); text-align: center; max-width: 640px; margin: 0 auto; }
+      .features { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin-top: 32px; }
+      .feature {
+        background: #fff;
+        border: 1px solid #e4e9f0;
+        border-radius: 12px;
+        padding: 20px;
+      }
+      .feature h3 { font-size: 1rem; margin-bottom: 6px; color: var(--primary-dark); }
+      .feature p { font-size: 0.92rem; color: var(--muted); }
+      .download {
+        text-align: center;
+        margin-top: 40px;
+      }
+      .download a.btn {
+        display: inline-block;
+        background: var(--primary);
+        color: #fff;
+        text-decoration: none;
+        font-size: 1.1rem;
+        font-weight: 700;
+        padding: 16px 34px;
+        border-radius: 999px;
+        box-shadow: 0 6px 18px rgba(21, 101, 192, 0.3);
+        transition: background 0.15s ease, transform 0.05s ease;
+      }
+      .download a.btn:hover { background: var(--primary-dark); }
+      .download a.btn:active { transform: translateY(1px); }
+      .hint { font-size: 0.85rem; color: var(--muted); margin-top: 14px; }
+      .steps { margin-top: 40px; background: #fff; border: 1px solid #e4e9f0; border-radius: 12px; padding: 24px; }
+      .steps h2 { font-size: 1.2rem; margin-bottom: 12px; color: var(--primary-dark); }
+      .steps ol { padding-left: 20px; color: var(--muted); }
+      .steps li { margin-bottom: 8px; }
+      footer { text-align: center; padding: 24px; color: var(--muted); font-size: 0.85rem; }
+    </style>
   </head>
   <body>
-    <h1>Guardian Notifications</h1>
-    <p>This site hosts the Guardian push/SMS notification function. There is no web page here.</p>
+    <header>
+      <h1>Guardian</h1>
+      <p class="tagline">IoT Wearable Protection Device</p>
+    </header>
+
+    <div class="container">
+      <p class="intro">
+        Guardian is a wearable that watches over you — and the people you love.
+        It detects falls and emergencies in real time, then instantly alerts your
+        trusted contacts by push notification and SMS with your live location.
+      </p>
+
+      <div class="features">
+        <div class="feature">
+          <h3>Fall Detection</h3>
+          <p>On-device accelerometer automatically detects falls the moment they happen.</p>
+        </div>
+        <div class="feature">
+          <h3>SOS Button</h3>
+          <p>One long-press triggers an instant emergency alert to your contacts.</p>
+        </div>
+        <div class="feature">
+          <h3>Live GPS Tracking</h3>
+          <p>See the wearer's real-time location on a map.</p>
+        </div>
+        <div class="feature">
+          <h3>Geofence Alerts</h3>
+          <p>Get notified the moment the wearer leaves a safe zone.</p>
+        </div>
+        <div class="feature">
+          <h3>Emergency Alerts</h3>
+          <p>Push notification + SMS to every emergency contact.</p>
+        </div>
+        <div class="feature">
+          <h3>Multi-Device</h3>
+          <p>Pair and monitor multiple devices from a single account.</p>
+        </div>
+      </div>
+
+      <div class="download">
+        <a class="btn" href="guardian.apk" download>Download for Android</a>
+        <p class="hint">
+          Tap the button, then open the downloaded file and allow
+          &ldquo;Install from unknown apps&rdquo; to install. A Play Store version is coming soon.
+        </p>
+      </div>
+
+      <div class="steps">
+        <h2>How it works</h2>
+        <ol>
+          <li>Wear the Guardian device.</li>
+          <li>Pair it with the app over Bluetooth.</li>
+          <li>If a fall or SOS is triggered, your contacts are alerted instantly with your location.</li>
+        </ol>
+      </div>
+    </div>
+
+    <footer>Guardian &middot; IoT Wearable Protection Device</footer>
   </body>
 </html>
