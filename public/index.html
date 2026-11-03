@@ -3,126 +3,310 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Guardian — IoT Wearable Protection Device</title>
+    <title>Guardian — Peace of Mind for the People You Love</title>
+    <meta name="description" content="Guardian is a wearable protection device that detects falls and emergencies in real time, then instantly alerts your trusted contacts with live location." />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet" />
     <style>
       :root {
         --primary: #1565c0;
         --primary-dark: #0d47a1;
+        --primary-deep: #0a3a7a;
+        --accent: #e3f2fd;
         --danger: #d32f2f;
-        --text: #1f2933;
-        --muted: #52606d;
-        --bg: #f5f7fa;
+        --text: #10243e;
+        --muted: #4b5f73;
+        --bg: #ffffff;
+        --bg-soft: #f4f8fc;
+        --border: #e2eaf3;
+        --radius: 16px;
+        --shadow: 0 10px 30px rgba(13, 71, 161, 0.10);
       }
       * { box-sizing: border-box; margin: 0; padding: 0; }
+      html { scroll-behavior: smooth; }
       body {
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        font-family: "Nunito", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
         color: var(--text);
         background: var(--bg);
         line-height: 1.6;
+        -webkit-font-smoothing: antialiased;
       }
-      header {
-        background: linear-gradient(135deg, var(--primary-dark), var(--primary));
-        color: #fff;
-        padding: 56px 24px;
-        text-align: center;
+      .container { max-width: 1040px; margin: 0 auto; padding: 0 24px; }
+
+      /* ── Buttons ── */
+      .btn {
+        display: inline-flex; align-items: center; gap: 10px;
+        background: var(--primary); color: #fff; text-decoration: none;
+        font-weight: 800; font-size: 1rem; padding: 14px 28px; border-radius: 999px;
+        box-shadow: 0 8px 24px rgba(21, 101, 192, 0.32);
+        transition: background .15s ease, transform .06s ease, box-shadow .15s ease;
       }
-      header h1 { font-size: 2.4rem; font-weight: 800; letter-spacing: -0.5px; }
-      header p.tagline { font-size: 1.15rem; opacity: 0.92; margin-top: 8px; }
-      .container { max-width: 860px; margin: 0 auto; padding: 40px 24px; }
-      .intro { font-size: 1.05rem; color: var(--muted); text-align: center; max-width: 640px; margin: 0 auto; }
-      .features { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin-top: 32px; }
+      .btn:hover { background: var(--primary-dark); box-shadow: 0 10px 28px rgba(13, 71, 161, 0.38); }
+      .btn:active { transform: translateY(1px); }
+      .btn svg { width: 18px; height: 18px; }
+      .btn.ghost { background: transparent; color: var(--primary); box-shadow: none; border: 2px solid var(--primary); }
+      .btn.ghost:hover { background: var(--accent); }
+
+      /* ── Header / nav ── */
+      nav {
+        position: sticky; top: 0; z-index: 50;
+        background: rgba(255,255,255,0.9); backdrop-filter: blur(8px);
+        border-bottom: 1px solid var(--border);
+      }
+      nav .container { display: flex; align-items: center; justify-content: space-between; height: 68px; }
+      .brand { display: flex; align-items: center; gap: 10px; font-weight: 900; font-size: 1.25rem; color: var(--primary-dark); }
+      .logo { width: 38px; height: 38px; border-radius: 10px; display: block; object-fit: cover; }
+      nav .btn { padding: 10px 20px; font-size: 0.92rem; }
+
+      /* ── Hero ── */
+      .hero {
+        position: relative; overflow: hidden;
+        background: linear-gradient(150deg, var(--primary-deep) 0%, var(--primary-dark) 45%, var(--primary) 100%);
+        color: #fff; padding: 88px 0 96px;
+      }
+      .hero::before, .hero::after {
+        content: ""; position: absolute; border-radius: 50%; filter: blur(60px); opacity: .35;
+      }
+      .hero::before { width: 420px; height: 420px; background: #4fc3f7; top: -140px; right: -100px; }
+      .hero::after { width: 360px; height: 360px; background: #90caf9; bottom: -160px; left: -80px; }
+      .hero .container { position: relative; z-index: 1; }
+      .hero-grid { display: grid; grid-template-columns: 1.05fr 0.95fr; gap: 44px; align-items: center; }
+      .hero-device img {
+        width: 100%; max-width: 460px; margin: 0 auto; display: block;
+        border-radius: 22px; background: #fff; border: 1px solid rgba(255,255,255,0.28);
+        box-shadow: 0 26px 60px rgba(0,0,0,0.35);
+      }
+      .hero .eyebrow {
+        display: inline-flex; align-items: center; gap: 8px;
+        background: rgba(255,255,255,0.14); border: 1px solid rgba(255,255,255,0.25);
+        padding: 7px 16px; border-radius: 999px; font-weight: 700; font-size: 0.85rem;
+        letter-spacing: 0.02em; margin-bottom: 22px;
+      }
+      .hero h1 {
+        font-size: clamp(2.2rem, 5.5vw, 3.6rem); font-weight: 900; line-height: 1.08;
+        letter-spacing: -0.02em; max-width: 15ch;
+      }
+      .hero h1 span { color: #90caf9; }
+      .hero .lead { font-size: 1.18rem; max-width: 52ch; margin-top: 18px; color: rgba(255,255,255,0.92); }
+      .hero .actions { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 32px; }
+      .hero .actions .btn { background: #fff; color: var(--primary-dark); box-shadow: 0 10px 30px rgba(0,0,0,0.18); }
+      .hero .actions .btn:hover { background: var(--accent); }
+      .hero .actions .btn.ghost { background: transparent; color: #fff; border-color: rgba(255,255,255,0.5); }
+      .hero .actions .btn.ghost:hover { background: rgba(255,255,255,0.12); }
+      .hero .stats { display: flex; flex-wrap: wrap; gap: 28px; margin-top: 44px; }
+      .hero .stat .num { font-size: 1.6rem; font-weight: 900; }
+      .hero .stat .lbl { font-size: 0.85rem; color: rgba(255,255,255,0.78); }
+
+      /* ── Sections ── */
+      section { padding: 72px 0; }
+      .section-head { text-align: center; max-width: 640px; margin: 0 auto 44px; }
+      .section-head h2 { font-size: clamp(1.7rem, 3.5vw, 2.3rem); font-weight: 900; letter-spacing: -0.01em; }
+      .section-head p { color: var(--muted); margin-top: 12px; font-size: 1.05rem; }
+
+      /* ── Feature grid ── */
+      .features { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 18px; }
       .feature {
-        background: #fff;
-        border: 1px solid #e4e9f0;
-        border-radius: 12px;
-        padding: 20px;
+        background: #fff; border: 1px solid var(--border); border-radius: var(--radius);
+        padding: 26px 24px; box-shadow: var(--shadow); transition: transform .12s ease;
       }
-      .feature h3 { font-size: 1rem; margin-bottom: 6px; color: var(--primary-dark); }
-      .feature p { font-size: 0.92rem; color: var(--muted); }
-      .download {
-        text-align: center;
-        margin-top: 40px;
+      .feature:hover { transform: translateY(-3px); }
+      .feature .icon {
+        width: 48px; height: 48px; border-radius: 12px; display: grid; place-items: center;
+        background: var(--accent); color: var(--primary); margin-bottom: 16px;
       }
-      .download a.btn {
-        display: inline-block;
-        background: var(--primary);
-        color: #fff;
-        text-decoration: none;
-        font-size: 1.1rem;
-        font-weight: 700;
-        padding: 16px 34px;
-        border-radius: 999px;
-        box-shadow: 0 6px 18px rgba(21, 101, 192, 0.3);
-        transition: background 0.15s ease, transform 0.05s ease;
+      .feature .icon svg { width: 24px; height: 24px; }
+      .feature h3 { font-size: 1.08rem; font-weight: 800; margin-bottom: 6px; }
+      .feature p { color: var(--muted); font-size: 0.95rem; }
+
+      /* ── How it works ── */
+      .how { background: var(--bg-soft); }
+      .steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 18px; }
+      .step { background: #fff; border: 1px solid var(--border); border-radius: var(--radius); padding: 28px 24px; position: relative; }
+      .step .num {
+        width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center;
+        background: var(--primary); color: #fff; font-weight: 900; font-size: 1.1rem; margin-bottom: 14px;
       }
-      .download a.btn:hover { background: var(--primary-dark); }
-      .download a.btn:active { transform: translateY(1px); }
-      .hint { font-size: 0.85rem; color: var(--muted); margin-top: 14px; }
-      .steps { margin-top: 40px; background: #fff; border: 1px solid #e4e9f0; border-radius: 12px; padding: 24px; }
-      .steps h2 { font-size: 1.2rem; margin-bottom: 12px; color: var(--primary-dark); }
-      .steps ol { padding-left: 20px; color: var(--muted); }
-      .steps li { margin-bottom: 8px; }
-      footer { text-align: center; padding: 24px; color: var(--muted); font-size: 0.85rem; }
+      .step h3 { font-size: 1.05rem; font-weight: 800; margin-bottom: 6px; }
+      .step p { color: var(--muted); font-size: 0.95rem; }
+
+      /* ── Audience ── */
+      .audience { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 18px; }
+      .card {
+        border-radius: var(--radius); padding: 30px 26px; color: #fff;
+        background: linear-gradient(150deg, var(--primary-dark), var(--primary));
+      }
+      .card:nth-child(2) { background: linear-gradient(150deg, #00695c, #00897b); }
+      .card:nth-child(3) { background: linear-gradient(150deg, #6a1b9a, #8e24aa); }
+      .card h3 { font-size: 1.15rem; font-weight: 900; margin-bottom: 8px; }
+      .card p { color: rgba(255,255,255,0.9); font-size: 0.95rem; }
+
+      /* ── Final CTA ── */
+      .cta {
+        position: relative; overflow: hidden; color: #fff; text-align: center;
+        background: linear-gradient(150deg, var(--primary-deep), var(--primary-dark));
+      }
+      .cta h2 { font-size: clamp(1.8rem, 4vw, 2.5rem); font-weight: 900; }
+      .cta p { color: rgba(255,255,255,0.9); margin: 14px auto 30px; max-width: 52ch; }
+      .cta .btn { background: #fff; color: var(--primary-dark); box-shadow: 0 10px 30px rgba(0,0,0,0.2); }
+      .cta .btn:hover { background: var(--accent); }
+
+      footer { border-top: 1px solid var(--border); padding: 32px 0; text-align: center; color: var(--muted); font-size: 0.88rem; }
+      footer .container { display: flex; flex-direction: column; gap: 6px; align-items: center; }
+      footer .logo { width: 44px; height: 44px; border-radius: 12px; margin-bottom: 4px; }
+
+      @media (max-width: 600px) {
+        section { padding: 52px 0; }
+        .hero { padding: 60px 0 68px; }
+        .hero-grid { grid-template-columns: 1fr; gap: 34px; }
+        .hero-device img { max-width: 340px; }
+      }
     </style>
   </head>
   <body>
-    <header>
-      <h1>Guardian</h1>
-      <p class="tagline">IoT Wearable Protection Device</p>
+    <nav>
+      <div class="container">
+        <div class="brand">
+          <img class="logo" src="images/logo.png" alt="Guardian logo" />
+          Guardian
+        </div>
+        <a class="btn" href="https://github.com/Tuma0991/PWPD/releases/latest/download/GuardianNako.apk">Download</a>
+      </div>
+    </nav>
+
+    <header class="hero">
+      <div class="container hero-grid">
+        <div class="hero-copy">
+        <span class="eyebrow">Real-time safety &middot; Fall detection &middot; GPS tracking</span>
+        <h1>Peace of mind, <span>wherever they go.</span></h1>
+        <p class="lead">
+          Guardian is a wearable that watches over the people you love — and tells you
+          the very moment they need help.
+        </p>
+        <div class="actions">
+          <a class="btn" href="https://github.com/Tuma0991/PWPD/releases/latest/download/GuardianNako.apk">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            Download for Android
+          </a>
+          <a class="btn ghost" href="#how">How it works</a>
+        </div>
+        <div class="stats">
+          <div class="stat"><div class="num">24/7</div><div class="lbl">Always watching over</div></div>
+          <div class="stat"><div class="num">Instant</div><div class="lbl">Push + SMS alerts</div></div>
+          <div class="stat"><div class="num">Live</div><div class="lbl">GPS location</div></div>
+        </div>
+        </div>
+        <div class="hero-device">
+          <img src="images/device.jpg" alt="The Guardian wearable protection device" />
+        </div>
+      </div>
     </header>
 
-    <div class="container">
-      <p class="intro">
-        Guardian is a wearable that watches over you — and the people you love.
-        It detects falls and emergencies in real time, then instantly alerts your
-        trusted contacts by push notification and SMS with your live location.
-      </p>
-
-      <div class="features">
-        <div class="feature">
-          <h3>Fall Detection</h3>
-          <p>On-device accelerometer automatically detects falls the moment they happen.</p>
+    <section id="features">
+      <div class="container">
+        <div class="section-head">
+          <h2>Everything you need to keep them safe</h2>
+          <p>Guardian turns a small wearable into a safety net for the people you care about most.</p>
         </div>
-        <div class="feature">
-          <h3>SOS Button</h3>
-          <p>One long-press triggers an instant emergency alert to your contacts.</p>
-        </div>
-        <div class="feature">
-          <h3>Live GPS Tracking</h3>
-          <p>See the wearer's real-time location on a map.</p>
-        </div>
-        <div class="feature">
-          <h3>Geofence Alerts</h3>
-          <p>Get notified the moment the wearer leaves a safe zone.</p>
-        </div>
-        <div class="feature">
-          <h3>Emergency Alerts</h3>
-          <p>Push notification + SMS to every emergency contact.</p>
-        </div>
-        <div class="feature">
-          <h3>Multi-Device</h3>
-          <p>Pair and monitor multiple devices from a single account.</p>
+        <div class="features">
+          <div class="feature">
+            <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/></svg></div>
+            <h3>Automatic Fall Detection</h3>
+            <p>On-device sensors detect a fall the instant it happens — no button press needed.</p>
+          </div>
+          <div class="feature">
+            <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg></div>
+            <h3>One-Tap SOS Button</h3>
+            <p>A long press sends an urgent alert to every emergency contact, instantly.</p>
+          </div>
+          <div class="feature">
+            <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg></div>
+            <h3>Live GPS Tracking</h3>
+            <p>See their real-time location on a map, right from your phone.</p>
+          </div>
+          <div class="feature">
+            <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 22V12h6v10"/></svg></div>
+            <h3>Safe-Zone Alerts</h3>
+            <p>Set a boundary and get notified the moment they leave it.</p>
+          </div>
+          <div class="feature">
+            <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></div>
+            <h3>Instant Emergency Alerts</h3>
+            <p>Push notification and SMS to every trusted contact at the same time.</p>
+          </div>
+          <div class="feature">
+            <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
+            <h3>Monitor Multiple Devices</h3>
+            <p>Keep an eye on every family member from one account.</p>
+          </div>
         </div>
       </div>
+    </section>
 
-      <div class="download">
-        <a class="btn" href="https://github.com/Tuma0991/PWPD/releases/latest/download/GuardianNako.apk">Download for Android</a>
-        <p class="hint">
-          Tap the button, then open the downloaded file and allow
-          &ldquo;Install from unknown apps&rdquo; to install. A Play Store version is coming soon.
-        </p>
+    <section class="how" id="how">
+      <div class="container">
+        <div class="section-head">
+          <h2>Set up in minutes, peace of mind forever</h2>
+        </div>
+        <div class="steps">
+          <div class="step">
+            <div class="num">1</div>
+            <h3>Wear the device</h3>
+            <p>Small and comfortable, it goes wherever they go.</p>
+          </div>
+          <div class="step">
+            <div class="num">2</div>
+            <h3>Pair it with the app</h3>
+            <p>Connect over Bluetooth and add your emergency contacts.</p>
+          </div>
+          <div class="step">
+            <div class="num">3</div>
+            <h3>You're covered</h3>
+            <p>If anything happens, you'll know instantly — with their location.</p>
+          </div>
+        </div>
       </div>
+    </section>
 
-      <div class="steps">
-        <h2>How it works</h2>
-        <ol>
-          <li>Wear the Guardian device.</li>
-          <li>Pair it with the app over Bluetooth.</li>
-          <li>If a fall or SOS is triggered, your contacts are alerted instantly with your location.</li>
-        </ol>
+    <section id="who">
+      <div class="container">
+        <div class="section-head">
+          <h2>Built for the people you love</h2>
+        </div>
+        <div class="audience">
+          <div class="card">
+            <h3>For parents</h3>
+            <p>Know your child is safe at school, at play, and on the way home.</p>
+          </div>
+          <div class="card">
+            <h3>For caregivers</h3>
+            <p>Watch over elderly parents and be there the moment they need you.</p>
+          </div>
+          <div class="card">
+            <h3>For peace of mind</h3>
+            <p>Support loved ones with special needs and give everyone reassurance.</p>
+          </div>
+        </div>
       </div>
-    </div>
+    </section>
 
-    <footer>Guardian &middot; IoT Wearable Protection Device</footer>
+    <section class="cta" id="download">
+      <div class="container">
+        <h2>Protect what matters most.</h2>
+        <p>Download the Guardian app and pair it with a device today.</p>
+        <a class="btn" href="https://github.com/Tuma0991/PWPD/releases/latest/download/GuardianNako.apk">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Download for Android
+        </a>
+      </div>
+    </section>
+
+    <footer>
+      <div class="container">
+        <img class="logo" src="images/logo.png" alt="Guardian logo" />
+        <span>Guardian &middot; IoT Wearable Protection Device</span>
+        <span>Real-time safety for the people you love.</span>
+      </div>
+    </footer>
   </body>
 </html>
