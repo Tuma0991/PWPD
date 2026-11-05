@@ -22,6 +22,7 @@ import 'devices_screen.dart';
 import 'device_settings_screen.dart';
 import 'alert_sound_screen.dart';
 import 'account_settings_screen.dart';
+import 'user_manual_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -851,6 +852,11 @@ class _DashboardTabState extends State<_DashboardTab> with OfflineToastMixin {
                 );
               } else if (value == 'about') {
                 _showAboutDialog(context);
+              } else if (value == 'manual') {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const UserManualScreen()),
+                );
               } else if (value == 'logout') {
                 final shouldLogout = await showDialog<bool>(
                   context: context,
@@ -913,6 +919,15 @@ class _DashboardTabState extends State<_DashboardTab> with OfflineToastMixin {
                   Icon(Icons.info_outline, size: 20, color: Color(0xFF1565C0)),
                   SizedBox(width: 12),
                   Text('About Us'),
+                ]),
+              ),
+              PopupMenuItem(
+                value: 'manual',
+                child: Row(children: [
+                  Icon(Icons.menu_book_outlined,
+                      size: 20, color: Color(0xFF1565C0)),
+                  SizedBox(width: 12),
+                  Text('User Manual'),
                 ]),
               ),
               PopupMenuDivider(),

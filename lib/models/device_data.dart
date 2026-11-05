@@ -5,9 +5,11 @@ class DeviceData {
   /// interval. Covers the slowest (resting) heartbeat with margin.
   static const int _fallbackStaleThresholdSeconds = 900;
 
-  /// Multiplier applied to the device's heartbeat interval. The device is
-  /// considered offline once it has missed this many heartbeats.
-  static const double _staleMultiplier = 2.5;
+  /// Multiplier applied to the device's heartbeat interval to compute the
+  /// offline window. The device is offline after ~2 missed heartbeats — with
+  /// the 30 s active / 60 s resting heartbeat this is ~60 s / ~120 s, so a
+  /// powered-off device shows as offline within about 1 minute.
+  static const double _staleMultiplier = 2.0;
 
   final double latitude;
   final double longitude;
@@ -18,8 +20,8 @@ class DeviceData {
   final int timestamp;
 
   /// Heartbeat interval reported by the device, in seconds. The v2 firmware
-  /// sends a heartbeat every 120 s (active) / 300 s (resting) instead of a
-  /// live 2 s stream, so offline detection must scale with this value.
+  /// sends a heartbeat every 30 s (active) / 60 s (resting), so offline
+  /// detection scales with this value.
   final int hbIntervalS;
 
   /// Device-reported power/activity mode: "resting", "active", or "emergency".

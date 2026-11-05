@@ -191,6 +191,10 @@ async function sendPush(deviceId, title, body, data) {
             notification: {
               channelId: "geofence_alerts",
               sound: "default",
+              priority: "high",
+              visibility: "public",
+              notificationCount: 1,
+              clickAction: "FLUTTER_NOTIFICATION_CLICK",
             },
           },
           apns: {
@@ -213,11 +217,11 @@ async function sendPush(deviceId, title, body, data) {
     }),
   );
 
-  for (const [, data] of entries) {
+  for (const [userId, data] of entries) {
     if (staleTokens.includes(data.token)) {
       await app()
         .database()
-        .ref(`/devices/${deviceId}/fcmTokens/${data.token}`)
+        .ref(`/devices/${deviceId}/fcmTokens/${userId}`)
         .remove();
     }
   }

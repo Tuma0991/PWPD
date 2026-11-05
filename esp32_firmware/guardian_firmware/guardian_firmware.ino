@@ -148,8 +148,8 @@ constexpr uint32_t GEOFENCE_REFRESH_MS   = 600000;  // re-download geofences eve
 constexpr int      GEO_QUEUE_LEN         = 8;
 
 // ── Network timing ──────────────────────────────────────────────────────────
-constexpr uint32_t HEARTBEAT_ACTIVE_MS   = 120000;  // 2 min
-constexpr uint32_t HEARTBEAT_RESTING_MS  = 300000;  // 5 min
+constexpr uint32_t HEARTBEAT_ACTIVE_MS   = 30000;   // 30 s
+constexpr uint32_t HEARTBEAT_RESTING_MS  = 60000;   // 60 s
 constexpr bool     ENABLE_COMMAND_POLL   = true;    // "locate now" / "refresh geofences" from the app
 constexpr uint32_t COMMAND_POLL_ACTIVE_MS  = 30000;
 constexpr uint32_t COMMAND_POLL_RESTING_MS = 60000;

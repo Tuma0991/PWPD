@@ -196,6 +196,10 @@ async function sendPush(deviceId, title, body, data) {
             notification: {
               channelId: "geofence_alerts",
               sound: "default",
+              priority: "high",
+              visibility: "public",
+              notificationCount: 1,
+              clickAction: "FLUTTER_NOTIFICATION_CLICK",
             },
           },
           apns: {
