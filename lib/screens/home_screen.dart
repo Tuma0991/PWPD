@@ -75,6 +75,12 @@ class _HomeScreenState extends State<HomeScreen> {
     setNotificationTapHandler((index) {
       if (mounted && index >= 0 && index <= 5) {
         setState(() => _currentIndex = index);
+        if (index == 1) {
+          // Recenter the map on the device after the tab switch.
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) _recenterRequest.value++;
+          });
+        }
       }
     });
 

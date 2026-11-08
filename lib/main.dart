@@ -72,17 +72,20 @@ void _onForegroundMessage(RemoteMessage message) {
 
   scaffoldMessengerKey.currentState?.showSnackBar(
     SnackBar(
-      content: Row(
-        children: [
-          const Icon(Icons.notifications_active, color: Colors.white, size: 20),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              notification.body ?? 'Geofence alert',
-              style: const TextStyle(fontWeight: FontWeight.w600),
+      content: GestureDetector(
+        onTap: () => _navigateToTab?.call(1),
+        child: Row(
+          children: [
+            const Icon(Icons.notifications_active, color: Colors.white, size: 20),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                notification.body ?? 'Geofence alert',
+                style: const TextStyle(fontWeight: FontWeight.w600),
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
       backgroundColor: const Color(0xFFE53935),
       duration: const Duration(seconds: 5),
@@ -94,10 +97,10 @@ void _onForegroundMessage(RemoteMessage message) {
 }
 
 void _handleNotificationNavigation(Map<String, dynamic> data) {
-  // Navigate to the Geofence tab (index 4) when a geofence notification
-  // is tapped.
+  // Tapping an alert notification opens the Map tab (index 1) so the
+  // guardian can see the device's live location.
   if (data['type'] is String) {
-    _navigateToTab?.call(4);
+    _navigateToTab?.call(1);
   }
 }
 
