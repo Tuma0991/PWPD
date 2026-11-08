@@ -5,7 +5,7 @@
     "node": "22"
   },
   "dependencies": {
-    "firebase-admin": "^14.3.0",
+    "firebase-admin": "^12.7.0",
     "nodemailer": "^9.0.5"
   }
 }
