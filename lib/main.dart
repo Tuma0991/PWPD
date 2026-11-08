@@ -84,6 +84,25 @@ void _onForegroundMessage(RemoteMessage message) {
                 style: const TextStyle(fontWeight: FontWeight.w600),
               ),
             ),
+            const SizedBox(width: 8),
+            TextButton(
+              onPressed: () {
+                scaffoldMessengerKey.currentState?.hideCurrentSnackBar();
+                _navigateToTab?.call(1);
+              },
+              style: TextButton.styleFrom(
+                backgroundColor: Colors.white,
+                foregroundColor: const Color(0xFFE53935),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8)),
+              ),
+              child: const Text(
+                'View Map',
+                style: TextStyle(fontWeight: FontWeight.w800, fontSize: 12),
+              ),
+            ),
           ],
         ),
       ),
@@ -97,11 +116,9 @@ void _onForegroundMessage(RemoteMessage message) {
 }
 
 void _handleNotificationNavigation(Map<String, dynamic> data) {
-  // Tapping an alert notification opens the Map tab (index 1) so the
+  // Tapping any alert notification opens the Map tab (index 1) so the
   // guardian can see the device's live location.
-  if (data['type'] is String) {
-    _navigateToTab?.call(1);
-  }
+  _navigateToTab?.call(1);
 }
 
 /// If the app was launched from a terminated state via a notification tap,
