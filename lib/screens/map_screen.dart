@@ -64,6 +64,7 @@ class _MapScreenState extends State<MapScreen> with OfflineToastMixin {
   LatLng? _guardianLocation;
   StreamSubscription<Position>? _guardianSub;
   bool _routeProfileDriving = true;
+  bool _satelliteView = true;
   List<LatLng>? _routePoints;
   bool _routeVisible = true;
   double? _routeDistanceMeters;
@@ -488,7 +489,9 @@ class _MapScreenState extends State<MapScreen> with OfflineToastMixin {
           ),
           children: [
             TileLayer(
-              urlTemplate: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+              urlTemplate: _satelliteView
+                  ? 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
+                  : 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
               userAgentPackageName: 'com.pwpd.application',
               maxZoom: 19,
               additionalOptions: const {
@@ -566,6 +569,16 @@ class _MapScreenState extends State<MapScreen> with OfflineToastMixin {
                 },
               ),
             ],
+          ),
+        ),
+
+        // Map type toggle (satellite / standard) — top-right of map
+        Positioned(
+          top: 12,
+          right: 16,
+          child: _MapTypeToggle(
+            satellite: _satelliteView,
+            onChanged: (v) => setState(() => _satelliteView = v),
           ),
         ),
 
@@ -793,7 +806,9 @@ class _MapScreenState extends State<MapScreen> with OfflineToastMixin {
             ),
             children: [
               TileLayer(
-                urlTemplate: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+                urlTemplate: _satelliteView
+                    ? 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
+                    : 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                 userAgentPackageName: 'com.pwpd.application',
                 additionalOptions: const {
                   'User-Agent': 'pwpd/1.0 (Flutter; Android)',
@@ -1822,6 +1837,71 @@ class _RouteProfileToggle extends StatelessWidget {
           _segment(
             icon: Icons.directions_walk,
             selected: !driving,
+            onTap: () => onChanged(false),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _segment({
+    required IconData icon,
+    required bool selected,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: const EdgeInsets.all(7),
+        decoration: BoxDecoration(
+          color: selected ? const Color(0xFF1565C0) : Colors.transparent,
+          shape: BoxShape.circle,
+        ),
+        child: Icon(
+          icon,
+          size: 18,
+          color: selected ? Colors.white : const Color(0xFF6B7A99),
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Map type toggle widget ─────────────────────────────────────────────────
+
+class _MapTypeToggle extends StatelessWidget {
+  final bool satellite;
+  final ValueChanged<bool> onChanged;
+
+  const _MapTypeToggle({required this.satellite, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(3),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(22),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.18),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _segment(
+            icon: Icons.satellite_alt,
+            selected: satellite,
+            onTap: () => onChanged(true),
+          ),
+          _segment(
+            icon: Icons.map,
+            selected: !satellite,
             onTap: () => onChanged(false),
           ),
         ],
