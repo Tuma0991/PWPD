@@ -165,6 +165,39 @@ const STALE_TOKEN_CODES = [
   "messaging/invalid-argument",
 ];
 
+// Bundled alert tones shipped with the app (see lib/models/alert_sound.dart).
+// Maps the app's sound id to the Android raw resource name under res/raw/.
+const SOUND_RESOURCES = {
+  emergency: "emergency_alarm",
+  siren: "alarm_siren",
+  beep: "alarm_beep",
+  chime: "alarm_chime",
+};
+
+// Resolves the owner's chosen alert sound to a raw resource name. Custom
+// sounds can't be used as notification sounds, so they fall back to the alarm.
+async function getAlertSound(deviceId) {
+  try {
+    const ownerSnap = await app()
+      .database()
+      .ref(`/devices/${deviceId}/owner`)
+      .once("value");
+    const ownerId = ownerSnap.val();
+    if (!ownerId) return "emergency_alarm";
+
+    const userDoc = await app()
+      .firestore()
+      .collection("users")
+      .doc(ownerId)
+      .get();
+    const soundId = userDoc.exists ? userDoc.data().alertSound : null;
+    return SOUND_RESOURCES[soundId] || "emergency_alarm";
+  } catch (err) {
+    console.error("getAlertSound error:", err.message);
+    return "emergency_alarm";
+  }
+}
+
 async function sendPush(deviceId, title, body, data) {
   const tokensSnap = await app()
     .database()
@@ -177,6 +210,7 @@ async function sendPush(deviceId, title, body, data) {
   const validTokens = entries.map(([, d]) => d.token).filter(Boolean);
   if (validTokens.length === 0) return;
 
+  const sound = await getAlertSound(deviceId);
   const staleTokens = [];
 
   await Promise.allSettled(
@@ -190,7 +224,7 @@ async function sendPush(deviceId, title, body, data) {
             priority: "high",
             notification: {
               channelId: "geofence_alerts",
-              sound: "default",
+              sound,
               priority: "high",
               visibility: "public",
               notificationCount: 1,

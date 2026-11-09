@@ -205,6 +205,21 @@ class FirebaseService {
     return doc.data()?['deviceId'] as String?;
   }
 
+  /// Persists the guardian's alert-sound choice so the Netlify notification
+  /// function can play the matching tone on push alerts. [soundId] is a bundled
+  /// sound id ("emergency", "siren", "beep", "chime") or "custom".
+  Future<void> saveAlertSoundPreference(String soundId) async {
+    final user = currentUser;
+    if (user == null) return;
+    try {
+      await _firestore.collection('users').doc(user.uid).set({
+        'alertSound': soundId,
+      }, SetOptions(merge: true));
+    } catch (e) {
+      debugPrint('Warning: Failed to save alert sound preference: $e');
+    }
+  }
+
   // ─── REAL-TIME DEVICE DATA (ESP32 → Firebase RTDB) ───────────────────────
 
   /// ESP32 pushes data here:

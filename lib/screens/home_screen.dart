@@ -71,6 +71,9 @@ class _HomeScreenState extends State<HomeScreen> {
     _userId = _firebase.currentUser?.uid;
     _loadDevices();
 
+    // Keep the cloud copy of the alert-sound choice in sync with this phone.
+    AlertSoundService.instance.syncAlertSoundToCloud();
+
     // Register this phone for push notifications when the deviceId changes
     setNotificationTapHandler((index) {
       if (mounted && index >= 0 && index <= 5) {

@@ -1,5 +1,6 @@
 // lib/services/alert_sound_service.dart
 
+import 'dart:async';
 import 'dart:io';
 
 import 'package:audioplayers/audioplayers.dart';
@@ -9,6 +10,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/alert_sound.dart';
+import 'firebase_service.dart';
 
 /// Persists the user's alarm-sound choice (bundled tone or a custom audio
 /// file) and resolves it into an [audioplayers] [Source].
@@ -70,6 +72,7 @@ class AlertSoundService {
     await prefs.setString(_keyType, AlertSoundSelection.typeBundled);
     await prefs.setString(_keyBundled, assetPath);
     revision.value++;
+    unawaited(FirebaseService().saveAlertSoundPreference(_bundledIdFor(assetPath)));
   }
 
   /// Opens the system audio picker, copies the chosen file into the app's
@@ -94,11 +97,33 @@ class AlertSoundService {
     await prefs.setString(_keyCustomName, picked.name);
     await prefs.setString(_keyCustomPath, file.path);
     revision.value++;
+    unawaited(FirebaseService().saveAlertSoundPreference('custom'));
 
     return AlertSoundSelection(
       type: AlertSoundSelection.typeCustom,
       customPath: file.path,
     );
+  }
+
+  /// Resolves a bundled asset path to its stable sound id ("emergency",
+  /// "siren", ...), falling back to the default alarm.
+  String _bundledIdFor(String assetPath) {
+    for (final s in bundledSounds) {
+      if (s.assetPath == assetPath) return s.id;
+    }
+    return bundledSounds.first.id;
+  }
+
+  /// Pushes the current selection to Firestore so push notifications can play
+  /// the matching tone. No-op when signed out.
+  Future<void> syncAlertSoundToCloud() async {
+    final sel = await getSelection();
+    if (sel.isCustom) {
+      await FirebaseService().saveAlertSoundPreference('custom');
+    } else {
+      await FirebaseService()
+          .saveAlertSoundPreference(_bundledIdFor(sel.bundledAsset));
+    }
   }
 
   /// Resolves the stored choice to a playable [Source], falling back to the
