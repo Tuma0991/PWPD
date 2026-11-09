@@ -10,6 +10,7 @@ import 'package:latlong2/latlong.dart';
 import '../models/device_data.dart';
 import '../models/device_settings_model.dart';
 import '../models/geofence_model.dart';
+import '../models/paired_device.dart';
 import '../services/firebase_service.dart';
 import '../services/routing_service.dart';
 import '../widgets/toast_notification.dart';
@@ -29,12 +30,20 @@ class MapScreen extends StatefulWidget {
   /// Fired by HomeScreen on "View on Map" to recenter and draw the route.
   final ValueNotifier<int>? recenterRequest;
 
+  /// All paired devices; non-active ones are shown as tappable pins.
+  final List<PairedDevice> devices;
+
+  /// Called when the user taps a non-active device pin to switch to it.
+  final ValueChanged<String>? onSelectDevice;
+
   const MapScreen({
     super.key,
     required this.userId,
     required this.deviceId,
     this.isActive = true,
     this.recenterRequest,
+    this.devices = const [],
+    this.onSelectDevice,
   });
 
   @override
@@ -53,6 +62,8 @@ class _MapScreenState extends State<MapScreen> with OfflineToastMixin {
   bool _hasMovedOnce = false;
   DeviceData? _latestData;
   StreamSubscription<DeviceData>? _dataSub;
+  final Map<String, LatLng> _secondaryLocations = {};
+  final Map<String, StreamSubscription<DeviceData>> _secondarySubs = {};
   StreamSubscription<DeviceSettingsModel>? _settingsSub;
   String? _wearerPhotoBase64;
   String _deviceName = '';
@@ -91,64 +102,128 @@ class _MapScreenState extends State<MapScreen> with OfflineToastMixin {
   @override
   void initState() {
     super.initState();
-    if (widget.deviceId.isNotEmpty) {
-      _dataSub = _firebase.listenToDeviceData(widget.deviceId).listen((data) {
-        if (!mounted) return;
-        setState(() {
-          _latestData = data;
-          _lastSeenLabel = data.lastSeenLabel;
-          if (_isValidGps(data.latitude, data.longitude)) {
-            final newLoc = LatLng(data.latitude, data.longitude);
-            // Only update when it actually changed — avoids rebuilds that
-            // reset the map view.
-            if (_deviceLocation != newLoc) {
-              _deviceLocation = newLoc;
-              if (_isFollowing && !_isDrawing) {
-                try {
-                  if (_hasMovedOnce) {
-                    _mapController.move(newLoc, _mapController.camera.zoom);
-                  } else {
-                    _mapController.move(newLoc, 15.0);
-                    _hasMovedOnce = true;
-                  }
-                } catch (_) {}
-              }
-            }
-          }
-        });
-      });
-
-      // Record app-open time so stale RTDB violations replayed by onChildAdded
-      // are filtered out (30 s grace for clock skew).
-      _appStartThreshold = DateTime.now().millisecondsSinceEpoch - 30000;
-
-      _violationSub = _firebase
-          .listenToGeofenceViolationsRTDB(widget.deviceId)
-          .listen(_onViolation);
-
-      _settingsSub = _firebase
-          .listenToDeviceSettings(widget.deviceId)
-          .listen((settings) {
-        if (!mounted) return;
-        setState(() {
-          _wearerPhotoBase64 = settings.photoBase64;
-          _deviceName = settings.name;
-        });
-      });
-
-      _emergencySub = _firebase
-          .listenToEmergencyAlert(widget.deviceId)
-          .listen((data) {
-        if (!mounted) return;
-        setState(() {
-          _emergencyActive = data['active'] == true;
-          _emergencyReason = data['reason'] as String? ?? '';
-        });
-      });
-    }
-
+    _subscribeToActiveDevice();
+    _syncSecondarySubscriptions();
     widget.recenterRequest?.addListener(_recenter);
     _startGuardianTracking();
+  }
+
+  @override
+  void didUpdateWidget(covariant MapScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.deviceId != widget.deviceId) {
+      _subscribeToActiveDevice();
+    }
+    if (oldWidget.devices != widget.devices ||
+        oldWidget.deviceId != widget.deviceId) {
+      _syncSecondarySubscriptions();
+    }
+    if (oldWidget.recenterRequest != widget.recenterRequest) {
+      oldWidget.recenterRequest?.removeListener(_recenter);
+      widget.recenterRequest?.addListener(_recenter);
+    }
+  }
+
+  /// (Re)subscribes to the active device's sensors, settings, violations and
+  /// emergency streams. Called on init and whenever the active device changes.
+  void _subscribeToActiveDevice() {
+    _dataSub?.cancel();
+    _violationSub?.cancel();
+    _settingsSub?.cancel();
+    _emergencySub?.cancel();
+
+    _deviceLocation = null;
+    _latestData = null;
+    _lastSeenLabel = 'Unknown';
+    _hasMovedOnce = false;
+    _wearerPhotoBase64 = null;
+    _deviceName = '';
+    _emergencyActive = false;
+    _emergencyReason = '';
+
+    if (widget.deviceId.isEmpty) return;
+
+    _dataSub = _firebase.listenToDeviceData(widget.deviceId).listen((data) {
+      if (!mounted) return;
+      setState(() {
+        _latestData = data;
+        _lastSeenLabel = data.lastSeenLabel;
+        if (_isValidGps(data.latitude, data.longitude)) {
+          final newLoc = LatLng(data.latitude, data.longitude);
+          // Only update when it actually changed — avoids rebuilds that
+          // reset the map view.
+          if (_deviceLocation != newLoc) {
+            _deviceLocation = newLoc;
+            if (_isFollowing && !_isDrawing) {
+              try {
+                if (_hasMovedOnce) {
+                  _mapController.move(newLoc, _mapController.camera.zoom);
+                } else {
+                  _mapController.move(newLoc, 15.0);
+                  _hasMovedOnce = true;
+                }
+              } catch (_) {}
+            }
+          }
+        }
+      });
+    });
+
+    // Record app-open time so stale RTDB violations replayed by onChildAdded
+    // are filtered out (30 s grace for clock skew).
+    _appStartThreshold = DateTime.now().millisecondsSinceEpoch - 30000;
+
+    _violationSub = _firebase
+        .listenToGeofenceViolationsRTDB(widget.deviceId)
+        .listen(_onViolation);
+
+    _settingsSub = _firebase
+        .listenToDeviceSettings(widget.deviceId)
+        .listen((settings) {
+      if (!mounted) return;
+      setState(() {
+        _wearerPhotoBase64 = settings.photoBase64;
+        _deviceName = settings.name;
+      });
+    });
+
+    _emergencySub = _firebase
+        .listenToEmergencyAlert(widget.deviceId)
+        .listen((data) {
+      if (!mounted) return;
+      setState(() {
+        _emergencyActive = data['active'] == true;
+        _emergencyReason = data['reason'] as String? ?? '';
+      });
+    });
+  }
+
+  /// Keeps a live location subscription for every paired device except the
+  /// active one, so their pins move on the map without switching focus.
+  void _syncSecondarySubscriptions() {
+    final activeId = widget.deviceId;
+    final wanted = widget.devices
+        .map((d) => d.deviceId)
+        .where((id) => id != activeId)
+        .toSet();
+
+    _secondarySubs.removeWhere((id, sub) {
+      if (wanted.contains(id)) return false;
+      sub.cancel();
+      return true;
+    });
+
+    for (final id in wanted) {
+      if (_secondarySubs.containsKey(id)) continue;
+      _secondarySubs[id] = _firebase.listenToDeviceData(id).listen((data) {
+        if (!mounted) return;
+        if (!_isValidGps(data.latitude, data.longitude)) return;
+        final loc = LatLng(data.latitude, data.longitude);
+        if (_secondaryLocations[id] != loc) {
+          setState(() => _secondaryLocations[id] = loc);
+        }
+      });
+    }
   }
 
   @override
@@ -158,6 +233,8 @@ class _MapScreenState extends State<MapScreen> with OfflineToastMixin {
     _settingsSub?.cancel();
     _emergencySub?.cancel();
     _guardianSub?.cancel();
+    _secondarySubs.forEach((_, sub) => sub.cancel());
+    _secondarySubs.clear();
     widget.recenterRequest?.removeListener(_recenter);
     disposeOfflineToast();
     super.dispose();
@@ -527,6 +604,20 @@ class _MapScreenState extends State<MapScreen> with OfflineToastMixin {
 
             MarkerLayer(
               markers: [
+                for (final d in widget.devices)
+                  if (d.deviceId != widget.deviceId &&
+                      _secondaryLocations[d.deviceId] != null)
+                    Marker(
+                      point: _secondaryLocations[d.deviceId]!,
+                      width: 140,
+                      height: 56,
+                      child: _SecondaryDeviceMarker(
+                        name: d.displayName,
+                        onTap: widget.onSelectDevice == null
+                            ? null
+                            : () => widget.onSelectDevice!(d.deviceId),
+                      ),
+                    ),
                 if (hasLocation)
                   Marker(
                     point: _deviceLocation!,
@@ -1678,6 +1769,70 @@ class _MapScreenState extends State<MapScreen> with OfflineToastMixin {
           'Please log in to use the map and geofences',
           style: TextStyle(color: Color(0xFF6B7A99)),
         ),
+      ),
+    );
+  }
+}
+
+// ─── Secondary device pin (tap to switch) ───────────────────────────────────
+
+class _SecondaryDeviceMarker extends StatelessWidget {
+  final String name;
+  final VoidCallback? onTap;
+
+  const _SecondaryDeviceMarker({required this.name, this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 28,
+            height: 28,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              shape: BoxShape.circle,
+              border: Border.all(color: const Color(0xFF6B7A99), width: 2),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.25),
+                  blurRadius: 6,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: const Icon(Icons.location_on,
+                color: Color(0xFF1565C0), size: 16),
+          ),
+          const SizedBox(height: 2),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(6),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.15),
+                  blurRadius: 4,
+                ),
+              ],
+            ),
+            child: Text(
+              name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
+                color: Color(0xFF1A2340),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

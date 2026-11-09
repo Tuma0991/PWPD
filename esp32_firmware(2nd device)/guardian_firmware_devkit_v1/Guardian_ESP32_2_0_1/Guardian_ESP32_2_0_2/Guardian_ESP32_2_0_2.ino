@@ -1774,6 +1774,28 @@ static void netTask(void* arg) {
 //  16. SETUP
 // ═══════════════════════════════════════════════════════════════════════════
 
+// Holding the button for 5 s while powering up erases the saved WiFi networks
+// so the device re-enters BLE provisioning on this boot. The LED toggles as
+// feedback while the hold is measured.
+static bool bootHoldRequested() {
+  if (digitalRead(PIN_SOS) != LOW) return false;
+  uint32_t t0 = millis();
+  while (digitalRead(PIN_SOS) == LOW) {
+    uint32_t held = millis() - t0;
+    digitalWrite(PIN_LED, ((held / 100) % 2) ? HIGH : LOW);
+    if (held >= BOOT_HOLD_MS) {
+      digitalWrite(PIN_LED, HIGH);
+      uint32_t w = millis();
+      while (digitalRead(PIN_SOS) == LOW && millis() - w < 5000) delay(10);
+      digitalWrite(PIN_LED, LOW);
+      return true;
+    }
+    delay(20);
+  }
+  digitalWrite(PIN_LED, LOW);
+  return false;
+}
+
 static bool connectBlocking(uint32_t timeoutMs) {
   registerWifiNetworks();
   wifiMulti.run(timeoutMs);
@@ -1844,15 +1866,15 @@ void setup() {
 
   loadConfig();
 
-  // SAFETY FIX v2.0.1:
-  // Boot-time WiFi erase is disabled while GPIO25 is being diagnosed.
-  // This prevents a false LOW reading from deleting credentials after BLE setup.
-  LOG("[BOOT] GPIO25 initial state: %d (1=released, 0=LOW)\n", digitalRead(PIN_SOS));
-  LOG("[BOOT] Boot-time WiFi erase is temporarily disabled\n");
-
-  LOG("[BOOT] SOS uses filtered polling; GPIO interrupt disabled\n");
-
   bool wasFresh = takeFreshFlag();
+
+  // Hold SOS for 5 s while powering up to erase saved WiFi and reopen BLE
+  // setup. Skipped on the reboot right after provisioning (wasFresh) so a
+  // finger still resting on the button can't immediately wipe the new network.
+  if (!wasFresh && bootHoldRequested()) {
+    LOG("[BOOT] Button held: clearing saved WiFi networks\n");
+    clearWifiNetworks();
+  }
 
   if (netCount == 0) {
     LOG("[BOOT] No WiFi saved -> provisioning\n");

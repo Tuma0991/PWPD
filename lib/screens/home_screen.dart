@@ -46,8 +46,11 @@ class _HomeScreenState extends State<HomeScreen> {
   StreamSubscription<List<PairedDevice>>? _devicesSub;
 
   // ─── Emergency dialog (shown once per emergency) ───────────────────────────
-  StreamSubscription<Map<String, dynamic>>? _emergencySub;
-  String? _emergencyListeningDeviceId;
+  final Map<String, StreamSubscription<Map<String, dynamic>>> _emergencySubs =
+      {};
+
+  /// The device whose emergency is currently being shown / alarmed for.
+  String _emergencyDeviceId = '';
 
   /// True once the dialog has been shown for the current emergency. Reset when
   /// the emergency is cleared ("Mark as Safe"), so the next one shows again.
@@ -110,7 +113,8 @@ class _HomeScreenState extends State<HomeScreen> {
     setNotificationTapHandler(null);
     _authSub?.cancel();
     _devicesSub?.cancel();
-    _emergencySub?.cancel();
+    _emergencySubs.forEach((_, sub) => sub.cancel());
+    _emergencySubs.clear();
     _recenterRequest.dispose();
     _alertPlayer.dispose();
     super.dispose();
@@ -158,7 +162,7 @@ class _HomeScreenState extends State<HomeScreen> {
       _isConfigured = devices.isNotEmpty;
       _isLoading = false;
     });
-    _subscribeToEmergency(activeId ?? '');
+    _syncEmergencySubscriptions(devices.map((d) => d.deviceId).toList());
   }
 
   /// Re-reads the active device and resubscribes after a sub-screen may have
@@ -168,52 +172,64 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _switchDevice(String deviceId) async {
     if (deviceId == _activeDeviceId) return;
     await _deviceConfig.setActiveDeviceId(deviceId);
-    _subscribeToEmergency(deviceId);
     if (mounted) setState(() => _activeDeviceId = deviceId);
   }
 
   // ─── Emergency dialog logic ────────────────────────────────────────────────
 
-  void _subscribeToEmergency(String deviceId) {
-    if (deviceId == _emergencyListeningDeviceId) return;
-    _emergencySub?.cancel();
-    _emergencySub = null;
-    _emergencyListeningDeviceId = deviceId;
-    _emergencyDialogShown = false;
-    if (deviceId.isEmpty) return;
-    _emergencySub =
-        _firebase.listenToEmergencyAlert(deviceId).listen(_onEmergencyEvent);
+  void _syncEmergencySubscriptions(List<String> deviceIds) {
+    final wanted = deviceIds.toSet();
+    _emergencySubs.removeWhere((id, sub) {
+      if (wanted.contains(id)) return false;
+      sub.cancel();
+      return true;
+    });
+    for (final id in wanted) {
+      if (_emergencySubs.containsKey(id)) continue;
+      _emergencySubs[id] = _firebase.listenToEmergencyAlert(id).listen((event) {
+        _onEmergencyEvent(id, event);
+      });
+    }
   }
 
-  void _onEmergencyEvent(Map<String, dynamic> event) {
+  void _onEmergencyEvent(String deviceId, Map<String, dynamic> event) {
     if (!mounted) return;
     final isActive = event['active'] == true;
     final reason = event['reason'] as String? ?? '';
 
-    if (_emergencyActive != isActive || _emergencyReason != reason) {
-      setState(() {
-        _emergencyActive = isActive;
-        _emergencyReason = reason;
-      });
-    }
-
     if (!isActive) {
-      // Cleared (Mark as Safe from anywhere) — allow the next emergency to
-      // show its dialog, and close this one if it's still open.
+      // Cleared (Mark as Safe from anywhere) — only reset if this is the
+      // device whose emergency we're currently showing.
+      if (_emergencyDeviceId != deviceId) return;
+      _emergencyDeviceId = '';
       _emergencyDialogShown = false;
       _stopAlertSound();
+      setState(() {
+        _emergencyActive = false;
+        _emergencyReason = '';
+      });
       if (_emergencyDialogOpen) {
         Navigator.of(context, rootNavigator: true).pop();
       }
       return;
     }
 
+    // One emergency at a time: if a different device is already alarming,
+    // ignore this second one until the first is cleared.
+    if (_emergencyActive && _emergencyDeviceId != deviceId) return;
+
+    setState(() {
+      _emergencyDeviceId = deviceId;
+      _emergencyActive = true;
+      _emergencyReason = reason;
+    });
+
     // The device writes emergency fields one at a time, so wait until the
     // reason has arrived, and only ever show the dialog once.
     if (reason.isEmpty || _emergencyDialogShown) return;
     _emergencyDialogShown = true;
     _startAlertSound();
-    _showEmergencyDialog(reason);
+    _showEmergencyDialog(deviceId, reason);
   }
 
   Future<void> _startAlertSound() async {
@@ -234,7 +250,7 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  Future<void> _showEmergencyDialog(String reason) async {
+  Future<void> _showEmergencyDialog(String deviceId, String reason) async {
     final isSOS = reason.contains('SOS button');
     final isFall = reason.contains('Fall');
     final title = isSOS
@@ -242,11 +258,16 @@ class _HomeScreenState extends State<HomeScreen> {
         : isFall
             ? 'FALL DETECTED'
             : 'EMERGENCY ALERT!';
+    final matches = _devices.where((d) => d.deviceId == deviceId).toList();
+    final deviceName = matches.isEmpty ? null : matches.first.displayName;
     final message = isSOS
-        ? 'The emergency button was pressed on the device.'
+        ? 'The emergency button was pressed on '
+            '${deviceName ?? 'the device'}.'
         : isFall
-            ? 'A possible fall was detected.'
-            : 'An emergency alert was triggered.';
+            ? 'A possible fall was detected on '
+                '${deviceName ?? 'the device'}.'
+            : 'An emergency alert was triggered on '
+                '${deviceName ?? 'the device'}.';
 
     _emergencyDialogOpen = true;
     final viewMap = await showDialog<bool>(
@@ -318,6 +339,8 @@ class _HomeScreenState extends State<HomeScreen> {
     _emergencyDialogOpen = false;
 
     if (viewMap == true && mounted) {
+      await _switchDevice(deviceId);
+      if (!mounted) return;
       setState(() => _currentIndex = 1);
       // Fire after the tab switch so the map recenters while visible.
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -326,7 +349,7 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  Widget _buildSafeStrip(String deviceId) {
+  Widget _buildSafeStrip() {
     final isSOS = _emergencyReason.contains('SOS button');
     final isFall = _emergencyReason.contains('Fall');
     final title = isSOS
@@ -361,7 +384,7 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
           TextButton(
-            onPressed: () => _firebase.clearEmergency(deviceId),
+            onPressed: () => _firebase.clearEmergency(_emergencyDeviceId),
             style: TextButton.styleFrom(
               backgroundColor: Colors.white,
               foregroundColor: const Color(0xFFE53935),
@@ -414,7 +437,9 @@ class _HomeScreenState extends State<HomeScreen> {
           userId: userId,
           deviceId: deviceId,
           isActive: _currentIndex == 1,
-          recenterRequest: _recenterRequest),
+          recenterRequest: _recenterRequest,
+          devices: _devices,
+          onSelectDevice: _switchDevice),
       FallDetectionScreen(deviceId: deviceId, isActive: _currentIndex == 2),
       AlertsScreen(deviceId: deviceId),
       const ContactsScreen(),
@@ -434,7 +459,7 @@ class _HomeScreenState extends State<HomeScreen> {
               children: screens,
             ),
           ),
-          if (showSafeStrip) _buildSafeStrip(deviceId),
+          if (showSafeStrip) _buildSafeStrip(),
         ],
       ),
       bottomNavigationBar: Container(
