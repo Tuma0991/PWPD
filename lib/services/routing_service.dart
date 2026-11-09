@@ -17,16 +17,26 @@ class RouteResult {
   });
 }
 
-/// Fetches road-following routes from the public OSRM demo server (free, no
-/// API key). `profile` is `driving` or `foot`.
+/// Fetches road-following routes from OSRM (free, no API key). `profile` is
+/// `driving` or `foot`.
 class RoutingService {
+  // FOSSGIS-hosted OSRM instances. A single OSRM server serves only one
+  // routing profile, so each profile needs its own host — the shared demo
+  // server (`router.project-osrm.org`) only serves the car profile and returns
+  // identical car results for every profile requested.
+  static const Map<String, String> _baseUrl = {
+    'driving': 'https://routing.openstreetmap.de/routed-car',
+    'foot': 'https://routing.openstreetmap.de/routed-foot',
+  };
+
   Future<RouteResult?> fetchRoute(
     LatLng origin,
     LatLng dest, {
     String profile = 'driving',
   }) async {
+    final base = _baseUrl[profile] ?? _baseUrl['driving']!;
     // OSRM expects `lng,lat` ordering.
-    final url = 'https://router.project-osrm.org/route/v1/$profile/'
+    final url = '$base/route/v1/$profile/'
         '${origin.longitude},${origin.latitude};${dest.longitude},${dest.latitude}'
         '?overview=full&geometries=geojson';
 
