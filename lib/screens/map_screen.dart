@@ -488,7 +488,7 @@ class _MapScreenState extends State<MapScreen> with OfflineToastMixin {
           ),
           children: [
             TileLayer(
-              urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+              urlTemplate: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
               userAgentPackageName: 'com.pwpd.application',
               maxZoom: 19,
               additionalOptions: const {
@@ -793,7 +793,7 @@ class _MapScreenState extends State<MapScreen> with OfflineToastMixin {
             ),
             children: [
               TileLayer(
-                urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                urlTemplate: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
                 userAgentPackageName: 'com.pwpd.application',
                 additionalOptions: const {
                   'User-Agent': 'pwpd/1.0 (Flutter; Android)',
