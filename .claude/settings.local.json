@@ -15,7 +15,9 @@
       "Read(//c/Users/tumat/AppData/Local/Pub/Cache/hosted/pub.dev/**)",
       "Bash(python *)",
       "Bash(dart format *)",
-      "Bash(gh --version)"
+      "Bash(gh --version)",
+      "Bash(curl -s -w \"\\\\nHTTP %{http_code}\\\\n\" \"https://router.project-osrm.org/route/v1/driving/120.9842,14.5995;121.0223,14.6091?overview=false\")",
+      "Bash(curl -s -w \"\\\\nHTTP %{http_code}\\\\n\" \"https://router.project-osrm.org/route/v1/foot/120.9842,14.5995;121.0223,14.6091?overview=false\")"
     ]
   }
 }
