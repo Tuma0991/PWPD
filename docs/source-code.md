@@ -205,7 +205,6 @@ async function sendPush(deviceId, title, body, data) {
               sound: "default",
               priority: "high",
               visibility: "public",
-              clickAction: "FLUTTER_NOTIFICATION_CLICK",
             },
           },
           apns: {

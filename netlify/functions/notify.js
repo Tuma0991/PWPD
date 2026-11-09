@@ -194,7 +194,6 @@ async function sendPush(deviceId, title, body, data) {
               priority: "high",
               visibility: "public",
               notificationCount: 1,
-              clickAction: "FLUTTER_NOTIFICATION_CLICK",
             },
           },
           apns: {
@@ -238,7 +237,6 @@ async function handleEmergency(p) {
   const body = `Device alert: ${reason}`;
 
   await sendPush(p.deviceId, title, body, {
-    click_action: "FLUTTER_NOTIFICATION_CLICK",
     type: isSOS ? "sos" : isFall ? "fall" : "emergency",
     deviceId: String(p.deviceId),
     reason,
@@ -261,7 +259,6 @@ async function handleGeofence(p) {
   const body = isExit ? `Device has left "${name}"` : `Device has entered "${name}"`;
 
   await sendPush(p.deviceId, title, body, {
-    click_action: "FLUTTER_NOTIFICATION_CLICK",
     type: `geofence_${type}`,
     geofenceId: String(p.geofenceId || ""),
     geofenceName: name,
