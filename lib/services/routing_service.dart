@@ -18,25 +18,20 @@ class RouteResult {
 }
 
 /// Fetches road-following routes from OSRM (free, no API key). `profile` is
-/// `driving` or `foot`.
+/// `driving` or `foot`. Both modes use the driving road network for the route
+/// geometry (the fastest/nearest road route to the device); walking mode only
+/// rescales the ETA to a typical walking pace.
 class RoutingService {
-  // FOSSGIS-hosted OSRM instances. A single OSRM server serves only one
-  // routing profile, so each profile needs its own host — the shared demo
-  // server (`router.project-osrm.org`) only serves the car profile and returns
-  // identical car results for every profile requested.
-  static const Map<String, String> _baseUrl = {
-    'driving': 'https://routing.openstreetmap.de/routed-car',
-    'foot': 'https://routing.openstreetmap.de/routed-foot',
-  };
+  static const String _drivingUrl = 'https://routing.openstreetmap.de/routed-car';
+  static const double _walkingMetersPerSecond = 1.39; // ~5 km/h
 
   Future<RouteResult?> fetchRoute(
     LatLng origin,
     LatLng dest, {
     String profile = 'driving',
   }) async {
-    final base = _baseUrl[profile] ?? _baseUrl['driving']!;
     // OSRM expects `lng,lat` ordering.
-    final url = '$base/route/v1/$profile/'
+    final url = '$_drivingUrl/route/v1/driving/'
         '${origin.longitude},${origin.latitude};${dest.longitude},${dest.latitude}'
         '?overview=full&geometries=geojson';
 
@@ -60,10 +55,15 @@ class RoutingService {
             ))
         .toList();
 
+    final distanceMeters = (route['distance'] as num).toDouble();
+    final durationSeconds = profile == 'foot'
+        ? distanceMeters / _walkingMetersPerSecond
+        : (route['duration'] as num).toDouble();
+
     return RouteResult(
       points: points,
-      distanceMeters: (route['distance'] as num).toDouble(),
-      durationSeconds: (route['duration'] as num).toDouble(),
+      distanceMeters: distanceMeters,
+      durationSeconds: durationSeconds,
     );
   }
 }
