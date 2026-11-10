@@ -83,13 +83,15 @@ async function sendSms(phone, _carrier, body) {
         message: body,
       }).toString(),
     });
-    const json = await res.json().catch(() => ({}));
+    const raw = await res.text();
+    let json = {};
+    try { json = JSON.parse(raw); } catch (_) { /* non-JSON body */ }
     const first = Array.isArray(json) ? json[0] : json;
     if (res.ok && first && !first.error) {
       console.log(`SMS sent to ${number} (Semaphore)`);
       return true;
     }
-    console.error(`Semaphore failed for ${number}:`, JSON.stringify(json));
+    console.error(`Semaphore failed for ${number}: HTTP ${res.status} — ${raw || JSON.stringify(json)}`);
     return false;
   } catch (err) {
     console.error(`Semaphore failed for ${number}:`, err.message);
