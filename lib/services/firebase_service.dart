@@ -274,11 +274,17 @@ class FirebaseService {
     if (!alertData.containsKey('timestamp')) {
       alertData['timestamp'] = FieldValue.serverTimestamp();
     }
-    await _firestore
-        .collection('users')
-        .doc(userId)
-        .collection('alerts')
-        .add(alertData);
+    final alertsRef =
+        _firestore.collection('users').doc(userId).collection('alerts');
+    // A stable dedupKey makes the write idempotent: re-logging the same
+    // emergency (e.g. RTDB replay on app start) overwrites instead of
+    // appending a duplicate document.
+    final dedupKey = alertData.remove('dedupKey') as String?;
+    if (dedupKey != null && dedupKey.isNotEmpty) {
+      await alertsRef.doc(dedupKey).set(alertData);
+    } else {
+      await alertsRef.add(alertData);
+    }
   }
 
   // ─── CONTACTS ────────────────────────────────────────────────────────────
@@ -401,15 +407,30 @@ class FirebaseService {
     final name = violationData['name'] ?? 'Unknown zone';
     final lat = violationData['lat'];
     final lng = violationData['lng'];
+    final deviceId = violationData['deviceId'] ?? '';
+    final rtdbKey = violationData['_rtdbKey'] as String? ?? '';
+    final violationTs = violationData['timestamp'];
 
-    await _firestore.collection('users').doc(userId).collection('alerts').add({
+    final alertData = <String, dynamic>{
       'type': 'geofence_$type',
       'message': 'Device $type geofence "$name"',
-      'deviceId': violationData['deviceId'] ?? '',
+      'deviceId': deviceId,
       'latitude': lat,
       'longitude': lng,
-      'timestamp': FieldValue.serverTimestamp(),
-    });
+      'timestamp': violationTs is int
+          ? Timestamp.fromMillisecondsSinceEpoch(violationTs)
+          : FieldValue.serverTimestamp(),
+    };
+
+    final alertsRef =
+        _firestore.collection('users').doc(userId).collection('alerts');
+    // Idempotent: key the document off the RTDB violation key so replayed
+    // violations on app start overwrite instead of creating duplicates.
+    if (rtdbKey.isNotEmpty) {
+      await alertsRef.doc('geo_${deviceId}_$rtdbKey').set(alertData);
+    } else {
+      await alertsRef.add(alertData);
+    }
   }
 
   /// Log a geofence violation (Firestore)

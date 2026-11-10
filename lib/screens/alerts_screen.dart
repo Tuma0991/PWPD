@@ -165,6 +165,10 @@ class _AlertsScreenState extends State<AlertsScreen> {
       if (triggeredAt != null && triggeredAt > 0) {
         alertData['timestamp'] =
             Timestamp.fromMillisecondsSinceEpoch(triggeredAt);
+        // Stable key so re-logging the same emergency (RTDB replay on app
+        // start) overwrites instead of duplicating the alert.
+        alertData['dedupKey'] =
+            '${widget.deviceId}_${triggeredAt}_$alertType';
       }
 
       // Include GPS coordinates if available
