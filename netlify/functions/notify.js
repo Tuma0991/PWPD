@@ -10,7 +10,7 @@
 // Required env vars (set in Netlify > Site settings > Environment variables):
 //   FIREBASE_SERVICE_ACCOUNT  full service-account JSON (single line or multiline)
 //   FIREBASE_DATABASE_URL     e.g. https://<project>-default-rtdb.firebaseio.com
-//   SEMAPHORE_API_KEY         your Semaphore API key (sendername omitted → "SEMAPHORE")
+//   IPROG_API_TOKEN           your IPROG SMS API token (from iprogsms.com dashboard)
 
 const admin = require("firebase-admin");
 
@@ -49,9 +49,9 @@ async function setCooldown(deviceId, contactId) {
     .set(Date.now());
 }
 
-// Converts a PH phone number to Semaphore's expected format (63XXXXXXXXXX).
+// Converts a PH phone number to IPROG's expected format (639XXXXXXXXX).
 // Handles 09…, 63…, +63… and bare 9… inputs.
-function toSemaphoreNumber(phone) {
+function toPHNumber(phone) {
   let digits = String(phone).replace(/\D/g, "");
   if (digits.startsWith("0")) digits = "63" + digits.slice(1);
   if (digits.length === 10 && digits.startsWith("9")) digits = "63" + digits;
@@ -59,42 +59,40 @@ function toSemaphoreNumber(phone) {
 }
 
 async function sendSms(phone, _carrier, body) {
-  const number = toSemaphoreNumber(phone);
+  const number = toPHNumber(phone);
   if (!number.startsWith("63")) {
     console.warn(`Invalid PH number "${phone}" — skipping SMS`);
     return false;
   }
 
-  const apiKey = process.env.SEMAPHORE_API_KEY;
-  if (!apiKey) {
-    console.error("SEMAPHORE_API_KEY env var is not set — skipping SMS");
+  const apiToken = process.env.IPROG_API_TOKEN;
+  if (!apiToken) {
+    console.error("IPROG_API_TOKEN env var is not set — skipping SMS");
     return false;
   }
 
-  // sendername is intentionally omitted so Semaphore uses its default sender
-  // ("SEMAPHORE") — no paid custom sender-name registration required.
   try {
-    const res = await fetch("https://api.semaphore.co/api/v4/messages", {
+    const res = await fetch("https://www.iprogsms.com/api/v1/sms_messages", {
       method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({
-        apikey: apiKey,
-        number,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        api_token: apiToken,
+        phone_number: number,
         message: body,
-      }).toString(),
+      }),
     });
     const raw = await res.text();
     let json = {};
     try { json = JSON.parse(raw); } catch (_) { /* non-JSON body */ }
-    const first = Array.isArray(json) ? json[0] : json;
-    if (res.ok && first && !first.error) {
-      console.log(`SMS sent to ${number} (Semaphore)`);
+    const ok = json.status === 200 || json.status === "200" || (res.ok && json.message_id);
+    if (ok) {
+      console.log(`SMS sent to ${number} (IPROG)`);
       return true;
     }
-    console.error(`Semaphore failed for ${number}: HTTP ${res.status} — ${raw || JSON.stringify(json)}`);
+    console.error(`IPROG failed for ${number}: HTTP ${res.status} — ${raw || JSON.stringify(json)}`);
     return false;
   } catch (err) {
-    console.error(`Semaphore failed for ${number}:`, err.message);
+    console.error(`IPROG failed for ${number}:`, err.message);
     return false;
   }
 }
