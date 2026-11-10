@@ -129,6 +129,30 @@ async function getEmergencyContacts(deviceId) {
   return contacts;
 }
 
+// Resolves the owner's chosen device name (or null if not set).
+async function getDeviceName(deviceId) {
+  try {
+    const ownerSnap = await app()
+      .database()
+      .ref(`/devices/${deviceId}/owner`)
+      .once("value");
+    const ownerId = ownerSnap.val();
+    if (!ownerId) return null;
+
+    const devDoc = await app()
+      .firestore()
+      .collection("users")
+      .doc(ownerId)
+      .collection("devices")
+      .doc(deviceId)
+      .get();
+    return devDoc.exists ? devDoc.data().deviceName : null;
+  } catch (err) {
+    console.error("getDeviceName error:", err.message);
+    return null;
+  }
+}
+
 async function notifyEmergencyContacts(deviceId, alertBody) {
   const contacts = await getEmergencyContacts(deviceId);
   if (contacts.length === 0) {
@@ -271,9 +295,10 @@ async function handleEmergency(p) {
     lng: String(p.lng ?? ""),
   });
 
+  const deviceName = (await getDeviceName(p.deviceId)) || "Guardian device";
   await notifyEmergencyContacts(
     p.deviceId,
-    `[URGENT] Guardian alert: ${reason}. Open the app for location and details.`,
+    `[URGENT] ${deviceName}: ${reason}.`,
   );
 }
 
@@ -295,9 +320,10 @@ async function handleGeofence(p) {
   });
 
   if (isExit) {
+    const deviceName = (await getDeviceName(p.deviceId)) || "Guardian device";
     await notifyEmergencyContacts(
       p.deviceId,
-      `[Guardian Alert] Device has left geofence zone "${name}". Check the app for location details.`,
+      `[Guardian Alert] ${deviceName} has left geofence zone "${name}".`,
     );
   }
 }
