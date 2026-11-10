@@ -12,6 +12,9 @@
 // 1️⃣ FIREBASE — copy these into secrets.h
 #define FIREBASE_HOST  "https://YOUR_PROJECT-default-rtdb.firebaseio.com"
 
+// Push/SMS webhook (Netlify function) — leave empty ("") to disable
+#define NOTIFY_WEBHOOK_URL  "https://YOUR-SITE.netlify.app/.netlify/functions/notify"
+
 // Choose ONE auth option:
 //   OPTION A — legacy database secret (simplest, bypasses security rules)
 #define FIREBASE_AUTH  "PASTE_NEW_DATABASE_SECRET_HERE"

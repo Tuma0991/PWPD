@@ -10,23 +10,9 @@
 // Required env vars (set in Netlify > Site settings > Environment variables):
 //   FIREBASE_SERVICE_ACCOUNT  full service-account JSON (single line or multiline)
 //   FIREBASE_DATABASE_URL     e.g. https://<project>-default-rtdb.firebaseio.com
-//   EMAIL_USER / EMAIL_PASS   Gmail account + App Password for email-to-SMS
+//   SEMAPHORE_API_KEY         your Semaphore API key (sendername omitted → "SEMAPHORE")
 
 const admin = require("firebase-admin");
-const nodemailer = require("nodemailer");
-
-// ─── Email-to-SMS gateway map ───────────────────────────────────────────────
-// Must match the Dart-side carrierSmsGateways map in lib/models/contact_model.dart.
-const CARRIER_GATEWAYS = {
-  "Globe (PH)": "txt.globe.com.ph",
-  "Smart (PH)": "isms.smart.com.ph",
-  "Sun (PH)": "suncellular.com.ph",
-  "DITO (PH)": "ditosms.com",
-  "Verizon": "vtext.com",
-  "AT&T": "txt.att.net",
-  "T-Mobile": "tmomail.net",
-  "Sprint": "messaging.sprintpcs.com",
-};
 
 // ─── Rate limiting ──────────────────────────────────────────────────────────
 const SMS_COOLDOWN_MS = 5 * 60 * 1000;
@@ -63,43 +49,50 @@ async function setCooldown(deviceId, contactId) {
     .set(Date.now());
 }
 
-let _transport = null;
-function getTransport() {
-  if (_transport) return _transport;
-  const user = process.env.EMAIL_USER;
-  const pass = process.env.EMAIL_PASS;
-  if (!user || !pass) {
-    console.warn("EMAIL_USER / EMAIL_PASS not set — SMS disabled");
-    return null;
-  }
-  _transport = nodemailer.createTransport({
-    service: "gmail",
-    auth: { user, pass },
-  });
-  return _transport;
+// Converts a PH phone number to Semaphore's expected format (63XXXXXXXXXX).
+// Handles 09…, 63…, +63… and bare 9… inputs.
+function toSemaphoreNumber(phone) {
+  let digits = String(phone).replace(/\D/g, "");
+  if (digits.startsWith("0")) digits = "63" + digits.slice(1);
+  if (digits.length === 10 && digits.startsWith("9")) digits = "63" + digits;
+  return digits;
 }
 
-async function sendSms(phone, carrier, body) {
-  const gateway = CARRIER_GATEWAYS[carrier];
-  if (!gateway) {
-    console.warn(`Unknown carrier "${carrier}" — skipping SMS`);
+async function sendSms(phone, _carrier, body) {
+  const number = toSemaphoreNumber(phone);
+  if (!number.startsWith("63")) {
+    console.warn(`Invalid PH number "${phone}" — skipping SMS`);
     return false;
   }
-  const transport = getTransport();
-  if (!transport) return false;
 
-  const to = `${phone}@${gateway}`;
+  const apiKey = process.env.SEMAPHORE_API_KEY;
+  if (!apiKey) {
+    console.error("SEMAPHORE_API_KEY env var is not set — skipping SMS");
+    return false;
+  }
+
+  // sendername is intentionally omitted so Semaphore uses its default sender
+  // ("SEMAPHORE") — no paid custom sender-name registration required.
   try {
-    await transport.sendMail({
-      from: process.env.EMAIL_USER,
-      to,
-      subject: "",
-      text: body,
+    const res = await fetch("https://api.semaphore.co/api/v4/messages", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        apikey: apiKey,
+        number,
+        message: body,
+      }).toString(),
     });
-    console.log(`SMS sent to ${phone} (${carrier})`);
-    return true;
+    const json = await res.json().catch(() => ({}));
+    const first = Array.isArray(json) ? json[0] : json;
+    if (res.ok && first && !first.error) {
+      console.log(`SMS sent to ${number} (Semaphore)`);
+      return true;
+    }
+    console.error(`Semaphore failed for ${number}:`, JSON.stringify(json));
+    return false;
   } catch (err) {
-    console.error(`SMS failed for ${phone} (${carrier}):`, err.message);
+    console.error(`Semaphore failed for ${number}:`, err.message);
     return false;
   }
 }
@@ -124,12 +117,12 @@ async function getEmergencyContacts(deviceId) {
   const contacts = [];
   contactsSnap.forEach((doc) => {
     const data = doc.data();
-    if (data.phone && data.carrier) {
+    if (data.phone) {
       contacts.push({
         id: doc.id,
         name: data.name || "Contact",
         phone: data.phone,
-        carrier: data.carrier,
+        carrier: data.carrier || "",
       });
     }
   });
@@ -139,7 +132,7 @@ async function getEmergencyContacts(deviceId) {
 async function notifyEmergencyContacts(deviceId, alertBody) {
   const contacts = await getEmergencyContacts(deviceId);
   if (contacts.length === 0) {
-    console.log(`No emergency contacts with carrier for device ${deviceId}`);
+    console.log(`No emergency contacts for device ${deviceId}`);
     return;
   }
 

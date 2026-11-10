@@ -144,8 +144,8 @@ constexpr uint32_t LOCATION_REPORT_MIN_MOVE_M = 25;    // upload a new position 
 // When USE_FIXED_GPS is 1 the firmware ignores the physical GPS module and
 // always reports this fixed coordinate. Set your latitude/longitude here.
 #define USE_FIXED_GPS 1                  // 1 = use the fixed coordinate below, 0 = normal GPS
-constexpr double FIXED_GPS_LAT = 14.599512; // <-- set latitude  (e.g. Manila)
-constexpr double FIXED_GPS_LNG = 120.984219;// <-- set longitude (e.g. Manila)
+constexpr double FIXED_GPS_LAT = 10.173667638003302; // <-- set latitude  (e.g. Manila)
+constexpr double FIXED_GPS_LNG = 122.85570750032542;// <-- set longitude (e.g. Manila)
 
 // ── Geofence ────────────────────────────────────────────────────────────────
 constexpr int      MAX_GEOFENCES         = 10;
