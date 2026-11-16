@@ -568,11 +568,10 @@ class _MapScreenState extends State<MapScreen> with OfflineToastMixin {
             TileLayer(
               urlTemplate: _satelliteView
                   ? 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
-                  : 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
-              subdomains: const ['a', 'b', 'c', 'd'],
-              retinaMode: !_satelliteView && RetinaMode.isHighDensity(context),
+                  : 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',
               userAgentPackageName: 'com.pwpd.application',
               maxZoom: 19,
+              maxNativeZoom: 18,
               additionalOptions: const {
                 'User-Agent': 'pwpd/1.0 (Flutter; Android)',
               },
@@ -901,10 +900,9 @@ class _MapScreenState extends State<MapScreen> with OfflineToastMixin {
               TileLayer(
                 urlTemplate: _satelliteView
                     ? 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
-                    : 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
-                subdomains: const ['a', 'b', 'c', 'd'],
-                retinaMode: !_satelliteView && RetinaMode.isHighDensity(context),
+                    : 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',
                 userAgentPackageName: 'com.pwpd.application',
+                maxNativeZoom: 18,
                 additionalOptions: const {
                   'User-Agent': 'pwpd/1.0 (Flutter; Android)',
                 },
