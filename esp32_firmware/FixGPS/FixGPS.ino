@@ -1601,7 +1601,9 @@ static void notifyEmergencyWebhook() {
   if (WiFi.status() == WL_CONNECTED) {
     notifyWebhook("emergency", body);
   } else {
-    sendSmsToSimContacts("[URGENT] " + deviceId + ": " + String(reason));
+    String sms = "[URGENT] " + deviceId + ": " + String(reason);
+    if (fix.valid) sms += " Loc: https://maps.google.com/?q=" + String(fix.lat, 6) + "," + String(fix.lng, 6);
+    sendSmsToSimContacts(sms);
   }
 }
 
@@ -1619,7 +1621,9 @@ static void notifyGeoWebhook(const GeoEvent& ev) {
   if (WiFi.status() == WL_CONNECTED) {
     notifyWebhook("geofence", body);
   } else if (!ev.entered) {
-    sendSmsToSimContacts("[Guardian Alert] " + deviceId + " has left geofence zone \"" + String(ev.name) + "\".");
+    String sms = "[Guardian Alert] " + deviceId + " has left geofence zone \"" + String(ev.name) + "\".";
+    sms += " Loc: https://maps.google.com/?q=" + String(ev.lat, 6) + "," + String(ev.lng, 6);
+    sendSmsToSimContacts(sms);
   }
 }
 

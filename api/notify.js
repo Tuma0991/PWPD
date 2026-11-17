@@ -9,7 +9,8 @@
 // Required env vars (set in Vercel > Project > Settings > Environment Variables):
 //   FIREBASE_SERVICE_ACCOUNT  full service-account JSON (single line or multiline)
 //   FIREBASE_DATABASE_URL     e.g. https://<project>-default-rtdb.firebaseio.com
-//   IPROG_API_TOKEN           your IPROG SMS API token (from iprogsms.com dashboard)
+//   TEXTBEE_API_KEY           your TextBee API key (textbee.dev dashboard)
+//   TEXTBEE_DEVICE_ID         ID of the registered Android phone that sends the SMS
 
 const admin = require("firebase-admin");
 
@@ -50,7 +51,7 @@ async function setCooldown(deviceId, contactId) {
     .set(Date.now());
 }
 
-// Converts a PH phone number to IPROG's expected format (639XXXXXXXXX).
+// Normalizes a PH phone number to digits-only 639XXXXXXXXX (sendSms adds the "+").
 // Handles 09…, 63…, +63… and bare 9… inputs.
 function toPHNumber(phone) {
   let digits = String(phone).replace(/\D/g, "");
@@ -70,40 +71,37 @@ function mapsLink(lat, lng) {
 }
 
 async function sendSms(phone, _carrier, body) {
-  const number = toPHNumber(phone);
-  if (!number.startsWith("63")) {
+  const digits = toPHNumber(phone);
+  if (!digits.startsWith("63")) {
     console.warn(`Invalid PH number "${phone}" — skipping SMS`);
     return false;
   }
 
-  const apiToken = process.env.IPROG_API_TOKEN;
-  if (!apiToken) {
-    console.error("IPROG_API_TOKEN env var is not set — skipping SMS");
+  const apiKey = process.env.TEXTBEE_API_KEY;
+  const deviceId = process.env.TEXTBEE_DEVICE_ID;
+  if (!apiKey || !deviceId) {
+    console.error("TEXTBEE_API_KEY / TEXTBEE_DEVICE_ID env var is not set — skipping SMS");
     return false;
   }
 
   try {
-    const res = await fetch("https://www.iprogsms.com/api/v1/sms_messages", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        api_token: apiToken,
-        phone_number: number,
-        message: body,
-      }),
-    });
+    const res = await fetch(
+      `https://api.textbee.dev/api/v1/gateway/devices/${deviceId}/send-sms`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-api-key": apiKey },
+        body: JSON.stringify({ recipients: ["+" + digits], message: body }),
+      },
+    );
     const raw = await res.text();
-    let json = {};
-    try { json = JSON.parse(raw); } catch (_) { /* non-JSON body */ }
-    const ok = json.status === 200 || json.status === "200" || (res.ok && json.message_id);
-    if (ok) {
-      console.log(`SMS sent to ${number} (IPROG)`);
+    if (res.ok) {
+      console.log(`SMS queued to +${digits} (TextBee)`);
       return true;
     }
-    console.error(`IPROG failed for ${number}: HTTP ${res.status} — ${raw || JSON.stringify(json)}`);
+    console.error(`TextBee failed for +${digits}: HTTP ${res.status} — ${raw}`);
     return false;
   } catch (err) {
-    console.error(`IPROG failed for ${number}:`, err.message);
+    console.error(`TextBee failed for +${digits}:`, err.message);
     return false;
   }
 }
