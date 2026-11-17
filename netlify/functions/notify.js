@@ -58,6 +58,16 @@ function toPHNumber(phone) {
   return digits;
 }
 
+// Builds a Google Maps link from lat/lng. Returns "" when the coordinates are
+// missing, non-numeric, or 0,0 (typical of a device with no GPS fix yet).
+function mapsLink(lat, lng) {
+  const la = parseFloat(lat);
+  const ln = parseFloat(lng);
+  if (!Number.isFinite(la) || !Number.isFinite(ln)) return "";
+  if (la === 0 && ln === 0) return "";
+  return `https://maps.google.com/?q=${la},${ln}`;
+}
+
 async function sendSms(phone, _carrier, body) {
   const number = toPHNumber(phone);
   if (!number.startsWith("63")) {
@@ -296,9 +306,10 @@ async function handleEmergency(p) {
   });
 
   const deviceName = (await getDeviceName(p.deviceId)) || "Guardian device";
+  const link = mapsLink(p.lat, p.lng);
   await notifyEmergencyContacts(
     p.deviceId,
-    `[URGENT] ${deviceName}: ${reason}.`,
+    `[URGENT] ${deviceName}: ${reason}.${link ? ` Location: ${link}` : ""}`,
   );
 }
 
@@ -321,9 +332,10 @@ async function handleGeofence(p) {
 
   if (isExit) {
     const deviceName = (await getDeviceName(p.deviceId)) || "Guardian device";
+    const link = mapsLink(p.lat, p.lng);
     await notifyEmergencyContacts(
       p.deviceId,
-      `[Guardian Alert] ${deviceName} has left geofence zone "${name}".`,
+      `[Guardian Alert] ${deviceName} has left geofence zone "${name}".${link ? ` Location: ${link}` : ""}`,
     );
   }
 }

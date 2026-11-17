@@ -10,6 +10,8 @@
     - Tracks location with the GPS only when needed (duty-cycled), checks
       geofences on the device, and uploads only when something happens.
     - Sends a slow heartbeat so the app can tell "OK" from "offline".
+    - SIM800L SMS fallback: if an alert cannot be delivered over WiFi/Firebase,
+      texts the contacts saved on the SIM (or SMS_FALLBACK_NUMBER) with a map link.
 
   Hardware (unchanged, no extra parts needed)
     - ESP32-S3 SuperMini
@@ -55,7 +57,7 @@
 
 #include "secrets.h"
 
-#define FW_VERSION   "2.0.0"
+#define FW_VERSION   "2.1.0"
 #define LOG_ENABLED  1          // set to 0 for production builds (no serial logging)
 
 #if LOG_ENABLED
@@ -83,10 +85,12 @@
 // ── Pins ────────────────────────────────────────────────────────────────────
 constexpr uint8_t PIN_GPS_RX = 5;      // GPS TX -> ESP32 RX
 constexpr uint8_t PIN_GPS_TX = 6;      // GPS RX <- ESP32 TX (used for UBX commands)
-constexpr uint8_t PIN_SOS    = 4;
+constexpr uint8_t PIN_SOS    = 7;
 constexpr uint8_t PIN_LED    = 3;
-constexpr uint8_t PIN_SDA    = 9;
-constexpr uint8_t PIN_SCL    = 8;
+constexpr uint8_t PIN_SDA    = 11;
+constexpr uint8_t PIN_SCL    = 10;
+constexpr uint8_t PIN_SIM_RX = 13;   // SIM800L TX -> ESP32 RX
+constexpr uint8_t PIN_SIM_TX = 12;   // SIM800L RX <- ESP32 TX
 
 // ── CPU frequency (MHz) ─────────────────────────────────────────────────────
 constexpr uint32_t CPU_MHZ_IDLE = 80;  // normal running
@@ -178,6 +182,30 @@ constexpr uint32_t NET_STALL_RESTART_MS  = 3600000; // WiFi up but nothing deliv
 #define CHAR_UUID_PROV_STATUS   "4fafc204-1fb5-459e-8fcc-c5c9c331914b"
 constexpr uint32_t PROV_WINDOW_MS        = 300000;  // BLE stays on for 5 min, then switches off
 
+// ── SMS fallback (SIM800L) ──────────────────────────────────────────────────
+// Hard-coded backup contact. Used when the SIM phonebook cannot be read or is empty.
+// International format, e.g. "+639171234567". Can also be defined in secrets.h
+// (a #define there wins over this default). The placeholder below is rejected
+// automatically (it contains letters), so nothing is sent to it.
+#ifndef SMS_FALLBACK_NUMBER
+  #define SMS_FALLBACK_NUMBER "+639911364335"
+#endif
+constexpr bool     SMS_USE_SIM_PHONEBOOK   = true;    // read contacts stored on the SIM card
+constexpr bool     SMS_ALWAYS_ADD_FALLBACK = true;   // true = text the fallback number even when the SIM has contacts
+constexpr bool     SMS_ALSO_WHEN_ONLINE    = false;   // true = send the SMS for every emergency, even if WiFi delivered it
+constexpr uint32_t SMS_EMERGENCY_DELAY_MS  = 10000;   // alert not delivered after this long -> send the SMS
+constexpr uint32_t SMS_WAIT_FIX_MS         = 8000;    // wait this long for a fresh GPS fix before sending without one
+constexpr uint32_t SMS_FIX_FRESH_MS        = 60000;   // a fix older than this is labelled "(last known)"
+constexpr uint8_t  SMS_SEND_RETRIES        = 2;       // extra attempts per contact
+constexpr int      MAX_SMS_CONTACTS        = 10;
+constexpr int      SIM_PHONEBOOK_SCAN      = 50;      // phonebook slots 1..N are read
+constexpr uint32_t SIM_BOOT_WAIT_MS        = 3000;    // let the modem power up before the first AT command
+constexpr uint32_t SIM_REG_TIMEOUT_MS      = 45000;   // wait for network registration at boot
+constexpr uint32_t SMS_SEND_TIMEOUT_MS     = 60000;   // network can be slow to confirm a send
+constexpr uint32_t SIM_PHONEBOOK_REFRESH_MS = 1800000; // re-read the SIM phonebook every 30 min while idle
+constexpr size_t   SMS_MAX_LEN             = 160;     // single-part GSM text
+constexpr int      GEO_SMS_QUEUE_LEN       = 4;
+
 // ── Storage (NVS) ───────────────────────────────────────────────────────────
 #define NVS_NAMESPACE        "guardian"
 #define NVS_KEY_DEVICE_ID    "device_id"
@@ -244,6 +272,7 @@ struct WifiNetwork { char ssid[33]; char pass[65]; };
 TinyGPSPlus    gps;
 MPU6050        mpu;
 HardwareSerial gpsSerial(2);
+HardwareSerial simSerial(1);   // SIM800L on UART1
 Preferences    prefs;
 WiFiMulti      wifiMulti;
 WiFiClientSecure netClient;
@@ -351,6 +380,7 @@ static void ledAck(uint32_t now);
 static void gpsEndSession(uint32_t now, bool ok);
 static void startProvisioning();
 static void netTask(void* arg);
+static void smsQueueGeoExit(const char* name, double lat, double lng);
 
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -460,7 +490,10 @@ static void ledAck(uint32_t now) { ledAckUntil = now + 900; }
 // ═══════════════════════════════════════════════════════════════════════════
 
 static void persistNetworks() {
-  prefs.begin(NVS_NAMESPACE, false);
+  if (!prefs.begin(NVS_NAMESPACE, false)) {
+    LOG("[CONFIG] ERROR: NVS open failed on save (check partition scheme / erase flash)\n");
+    return;
+  }
   prefs.putUChar(NVS_KEY_NET_COUNT, (uint8_t)netCount);
   char key[8];
   for (int i = 0; i < MAX_WIFI_NETS; i++) {
@@ -473,7 +506,9 @@ static void persistNetworks() {
 }
 
 static void loadConfig() {
-  prefs.begin(NVS_NAMESPACE, false);
+  if (!prefs.begin(NVS_NAMESPACE, false)) {
+    LOG("[CONFIG] ERROR: NVS open failed on load (check partition scheme / erase flash)\n");
+  }
 
   deviceId = prefs.getString(NVS_KEY_DEVICE_ID, "");
   // Regenerate if missing, or if it was saved from a degenerate all-zero MAC.
@@ -1043,6 +1078,7 @@ static void queueGeoEvent(const Geofence& g, bool entered, double lat, double ln
     xQueueSend(geoQueue, &ev, 0);
   }
   LOG("[GEOFENCE] '%s' %s\n", g.name, entered ? "entered" : "exited");
+  if (!entered && !wifiUp) smsQueueGeoExit(g.name, lat, lng);   // offline: text the contacts
   if (netTaskHandle) xTaskNotifyGive(netTaskHandle);
 }
 
@@ -1506,6 +1542,330 @@ static void notifyWebhook(const char* kind, const String& body) {
 #endif
 }
 
+// ── SIM800L SMS fallback ─────────────────────────────────────────────────────
+// A dedicated task (smsTask) owns the modem. It texts the contacts when:
+//   * an emergency has not been delivered over WiFi/Firebase within
+//     SMS_EMERGENCY_DELAY_MS (WiFi down, Firebase unreachable, ...), or
+//   * a geofence EXIT is detected while WiFi is down.
+// Contacts = phonebook entries stored on the SIM ("SM" storage). If none can be
+// read (modem fault, no SIM, empty phonebook) SMS_FALLBACK_NUMBER is used instead.
+// Because this runs in its own task it works even when netTask is stuck
+// retrying WiFi, and the AT waits never block fall detection or the button.
+
+struct SmsGeoJob { char name[48]; double lat; double lng; };
+
+static QueueHandle_t smsGeoQueue   = nullptr;
+static TaskHandle_t  smsTaskHandle = nullptr;
+
+// Only smsTask touches the state below, so no locking is needed.
+static bool simReady        = false;
+static char smsContacts[MAX_SMS_CONTACTS][24];
+static int  smsContactCount = 0;
+static int  smsSimCount     = 0;       // how many of those came from the SIM
+
+// ── AT helpers ──────────────────────────────────────────────────────────────
+
+// Collects the modem's answer until `expect` shows up, "ERROR" shows up, or the timeout ends.
+static bool simWait(const char* expect, uint32_t timeoutMs, String* out = nullptr) {
+  String buf;
+  buf.reserve(256);
+  uint32_t t0 = millis();
+  bool ok = false;
+  while (millis() - t0 < timeoutMs) {
+    while (simSerial.available()) {
+      char c = (char)simSerial.read();
+      if (buf.length() < 6000) buf += c;
+    }
+    if (expect && buf.indexOf(expect) >= 0) { ok = true; break; }
+    if (buf.indexOf("ERROR") >= 0) break;
+    vTaskDelay(pdMS_TO_TICKS(20));
+  }
+  if (out) *out = buf;
+  return ok;
+}
+
+static bool simCmd(const char* cmd, const char* expect, uint32_t timeoutMs, String* out = nullptr) {
+  while (simSerial.available()) simSerial.read();      // drop leftovers from earlier commands
+  simSerial.print(cmd);
+  simSerial.print("\r");
+  return simWait(expect, timeoutMs, out);
+}
+
+// "+CREG: 0,1" -> 1.  1 = home network, 5 = roaming.
+static int simRegStat(const String& r) {
+  int p = r.indexOf("+CREG:");
+  if (p < 0) return -1;
+  int c = r.indexOf(',', p);
+  if (c < 0) return -1;
+  return r.substring(c + 1).toInt();
+}
+
+// Wakes the modem, checks the SIM, waits for network registration, sets text mode.
+static bool simInit(uint32_t regTimeoutMs) {
+  bool alive = false;
+  for (int i = 0; i < 10 && !alive; i++) alive = simCmd("AT", "OK", 1000);
+  if (!alive) { LOG("[SIM] No answer to AT (check wiring and power)\n"); return false; }
+
+  simCmd("ATE0", "OK", 1000);                          // echo off
+
+  String r;
+  bool simOk = false;
+  for (int i = 0; i < 8 && !simOk; i++) {
+    simCmd("AT+CPIN?", "OK", 2000, &r);
+    simOk = r.indexOf("READY") >= 0;
+    if (!simOk) vTaskDelay(pdMS_TO_TICKS(1000));
+  }
+  if (!simOk) { LOG("[SIM] SIM card not ready (missing, PIN-locked or bad contact)\n"); return false; }
+
+  bool reg = false;
+  uint32_t t0 = millis();
+  do {
+    if (simCmd("AT+CREG?", "OK", 2000, &r)) {
+      int st = simRegStat(r);
+      if (st == 1 || st == 5) { reg = true; break; }
+    }
+    vTaskDelay(pdMS_TO_TICKS(1500));
+  } while (millis() - t0 < regTimeoutMs);
+
+  simCmd("AT+CMGF=1", "OK", 1000);                     // text mode
+  simCmd("AT+CSCS=\"GSM\"", "OK", 1000);               // plain GSM charset
+  if (simCmd("AT+CSQ", "OK", 1000, &r)) { r.trim(); LOG("[SIM] %s\n", r.c_str()); }
+
+  if (!reg) LOG("[SIM] Not registered on a network (no signal, no credit, or antenna?)\n");
+  else      LOG("[SIM] Ready and registered\n");
+  return reg;
+}
+
+// Quick health check before sending; re-initialises the modem if it dropped out.
+static bool simEnsureReady() {
+  if (simReady) {
+    String r;
+    if (simCmd("AT", "OK", 1000) && simCmd("AT+CREG?", "OK", 2000, &r)) {
+      int st = simRegStat(r);
+      if (st == 1 || st == 5) return true;
+    }
+    simReady = false;
+  }
+  simReady = simInit(20000);
+  return simReady;
+}
+
+// ── Contacts ────────────────────────────────────────────────────────────────
+
+// Cleans a number to digits (and one leading '+'), rejects junk and duplicates.
+static bool smsAddContact(const char* raw, bool fromSim) {
+  char clean[24];
+  size_t n = 0;
+  for (const char* p = raw; *p; p++) {
+    char c = *p;
+    if (isalpha((unsigned char)c)) return false;       // placeholder or garbage
+    if (isdigit((unsigned char)c) || (c == '+' && n == 0)) {
+      if (n >= sizeof(clean) - 1) return false;
+      clean[n++] = c;
+    }
+  }
+  clean[n] = '\0';
+  if (n < 7) return false;
+  for (int i = 0; i < smsContactCount; i++)
+    if (strcmp(smsContacts[i], clean) == 0) return false;
+  if (smsContactCount >= MAX_SMS_CONTACTS) return false;
+  strcpy(smsContacts[smsContactCount++], clean);
+  if (fromSim) smsSimCount++;
+  return true;
+}
+
+// Reads the whole phonebook first, THEN the numbers are used (reading and sending at the
+// same time mixes up the modem's replies). Falls back to the hard-coded number.
+static void simLoadPhonebook() {
+  smsContactCount = 0;
+  smsSimCount = 0;
+
+  if (SMS_USE_SIM_PHONEBOOK && simCmd("AT+CPBS=\"SM\"", "OK", 2000)) {
+    int last = SIM_PHONEBOOK_SCAN;
+    String r;
+    if (simCmd("AT+CPBS?", "OK", 2000, &r)) {          // +CPBS: "SM",5,250  (used, total)
+      int p = r.indexOf("+CPBS:");
+      if (p >= 0) {
+        int c1 = r.indexOf(',', p);
+        int c2 = (c1 > 0) ? r.indexOf(',', c1 + 1) : -1;
+        if (c2 > c1) {
+          int total = r.substring(c2 + 1).toInt();
+          if (total > 0 && total < last) last = total;  // some SIMs have fewer slots
+        }
+      }
+    }
+    char cmd[24];
+    snprintf(cmd, sizeof(cmd), "AT+CPBR=1,%d", last);
+    if (simCmd(cmd, "OK", 10000, &r)) {
+      int pos = 0;
+      while (pos < (int)r.length()) {
+        int nl = r.indexOf('\n', pos);
+        if (nl < 0) nl = r.length();
+        String line = r.substring(pos, nl);
+        line.trim();
+        pos = nl + 1;
+        if (!line.startsWith("+CPBR:")) continue;
+        int q1 = line.indexOf('"');
+        int q2 = (q1 >= 0) ? line.indexOf('"', q1 + 1) : -1;
+        if (q1 >= 0 && q2 > q1) smsAddContact(line.substring(q1 + 1, q2).c_str(), true);
+      }
+    }
+  }
+
+  LOG("[SMS] %d contact(s) read from the SIM\n", smsSimCount);
+
+  if (smsSimCount == 0 || SMS_ALWAYS_ADD_FALLBACK) {
+    if (smsAddContact(SMS_FALLBACK_NUMBER, false)) LOG("[SMS] Using the hard-coded fallback number\n");
+    else if (smsContactCount == 0) LOG("[SMS] WARNING: no contacts available. Set SMS_FALLBACK_NUMBER or save numbers on the SIM\n");
+  }
+}
+
+// ── Sending ─────────────────────────────────────────────────────────────────
+
+static bool simSendSms(const char* number, const char* text) {
+  simCmd("AT+CMGF=1", "OK", 1000);
+  while (simSerial.available()) simSerial.read();
+  simSerial.print("AT+CMGS=\"");
+  simSerial.print(number);
+  simSerial.print("\"\r");
+  if (!simWait(">", 8000)) {                           // modem did not offer the text prompt
+    simSerial.write(0x1B);                             // ESC cancels
+    vTaskDelay(pdMS_TO_TICKS(500));
+    LOG("[SMS] No text prompt from the modem\n");
+    return false;
+  }
+  simSerial.print(text);
+  simSerial.write(0x1A);                               // Ctrl+Z = send
+  bool ok = simWait("+CMGS:", SMS_SEND_TIMEOUT_MS);
+  LOG("[SMS] send %s\n", ok ? "OK" : "FAILED");
+  return ok;
+}
+
+// Texts every contact (with retries). Returns how many were delivered to the network.
+static int smsBroadcast(const char* text) {
+  if (smsContactCount == 0) return 0;
+  if (!simEnsureReady()) { LOG("[SMS] Modem not ready\n"); return 0; }
+  int sent = 0;
+  for (int i = 0; i < smsContactCount; i++) {
+    bool ok = false;
+    for (int a = 0; a <= SMS_SEND_RETRIES && !ok; a++) {
+      ok = simSendSms(smsContacts[i], text);
+      if (!ok) vTaskDelay(pdMS_TO_TICKS(2000));
+    }
+    if (ok) sent++;
+  }
+  return sent;
+}
+
+// ── Message text ────────────────────────────────────────────────────────────
+
+static void smsClean(char* s) {
+  for (; *s; s++) if ((uint8_t)*s < 32 || (uint8_t)*s > 126) *s = '?';   // keep plain GSM text
+}
+
+// head + map link, kept within one SMS. The link is never cut, the head is shortened instead.
+static void smsMakeText(char* out, size_t outSize, const char* head,
+                        bool havePos, double lat, double lng, bool stale) {
+  char tail[96];
+  if (havePos) snprintf(tail, sizeof(tail), " Loc: https://maps.google.com/?q=%.6f,%.6f%s",
+                        lat, lng, stale ? " (last known)" : "");
+  else         snprintf(tail, sizeof(tail), " Location unknown.");
+  size_t tl = strlen(tail);
+  int room = (SMS_MAX_LEN > tl) ? (int)(SMS_MAX_LEN - tl) : 0;
+  snprintf(out, outSize, "%.*s%s", room, head, tail);
+  smsClean(out);
+}
+
+static void smsQueueGeoExit(const char* name, double lat, double lng) {
+  if (!smsGeoQueue) return;
+  SmsGeoJob j;
+  memset(&j, 0, sizeof(j));
+  strlcpy(j.name, name, sizeof(j.name));
+  j.lat = lat;
+  j.lng = lng;
+  xQueueSend(smsGeoQueue, &j, 0);
+}
+
+// ── The task ────────────────────────────────────────────────────────────────
+
+static void smsTask(void* arg) {
+  (void)arg;
+
+  vTaskDelay(pdMS_TO_TICKS(SIM_BOOT_WAIT_MS));
+  simReady = simInit(SIM_REG_TIMEOUT_MS);
+  simLoadPhonebook();                                  // also arms the fallback number if the SIM gave nothing
+  uint32_t lastPhonebook = millis();
+
+  bool     emgSent = false, followUpSent = false, sentWithFreshFix = false;
+  uint32_t fixWaitStart = 0, nextTry = 0;
+
+  for (;;) {
+    vTaskDelay(pdMS_TO_TICKS(500));
+    uint32_t now = millis();
+
+    // ── 1. Emergency ────────────────────────────────────────────────────────
+    if (!emergencyActive) {
+      emgSent = false; followUpSent = false; sentWithFreshFix = false;
+      fixWaitStart = 0; nextTry = 0;
+    } else {
+      uint32_t elapsed = now - emergencyStartMs;
+      bool need = !emgSent &&
+                  (SMS_ALSO_WHEN_ONLINE || (!alertDelivered && elapsed >= SMS_EMERGENCY_DELAY_MS));
+
+      if (need && (int32_t)(now - nextTry) >= 0) {
+        GpsFix f = getFix();
+        bool fresh = f.valid && (now - f.atMs) <= SMS_FIX_FRESH_MS;
+        if (!fresh && fixWaitStart == 0) fixWaitStart = now;
+
+        if (fresh || (now - fixWaitStart) >= SMS_WAIT_FIX_MS) {
+          char reason[sizeof(alertReason)];
+          portENTER_CRITICAL(&alertMux);
+          strlcpy(reason, alertReason, sizeof(reason));
+          portEXIT_CRITICAL(&alertMux);
+
+          char head[128], text[SMS_MAX_LEN + 1];
+          snprintf(head, sizeof(head), "[URGENT] %s: %s", deviceId.c_str(), reason);
+          smsMakeText(text, sizeof(text), head, f.valid, f.lat, f.lng, !fresh);
+
+          if (smsSimCount == 0) simLoadPhonebook();    // SIM was unreadable earlier: try again now
+          LOG("[SMS] Emergency -> %d contact(s)\n", smsContactCount);
+          int n = smsBroadcast(text);
+          if (n > 0) { emgSent = true; sentWithFreshFix = fresh; }
+          else       nextTry = millis() + 15000;       // modem busy / no network: try again
+        }
+      }
+
+      // The first SMS went out without a position: send one follow-up once a fix arrives.
+      if (emgSent && !sentWithFreshFix && !followUpSent) {
+        GpsFix f = getFix();
+        if (f.valid && (now - f.atMs) <= SMS_FIX_FRESH_MS) {
+          char head[96], text[SMS_MAX_LEN + 1];
+          snprintf(head, sizeof(head), "[URGENT] %s location update.", deviceId.c_str());
+          smsMakeText(text, sizeof(text), head, true, f.lat, f.lng, false);
+          smsBroadcast(text);
+          followUpSent = true;
+        }
+      }
+    }
+
+    // ── 2. Geofence exits that happened while WiFi was down ─────────────────
+    SmsGeoJob job;
+    while (xQueueReceive(smsGeoQueue, &job, 0) == pdTRUE) {
+      char head[128], text[SMS_MAX_LEN + 1];
+      snprintf(head, sizeof(head), "[Guardian] %s left zone '%s'.", deviceId.c_str(), job.name);
+      smsMakeText(text, sizeof(text), head, true, job.lat, job.lng, false);
+      smsBroadcast(text);
+    }
+
+    // ── 3. Keep the contact list fresh while idle ───────────────────────────
+    if (!emergencyActive && (now - lastPhonebook) >= SIM_PHONEBOOK_REFRESH_MS) {
+      simEnsureReady();
+      simLoadPhonebook();
+      lastPhonebook = millis();
+    }
+  }
+}
+
 static void notifyEmergencyWebhook() {
   GpsFix fix = getFix();
   char reason[sizeof(alertReason)];
@@ -1526,7 +1886,7 @@ static void notifyEmergencyWebhook() {
   }
   String body;
   serializeJson(doc, body);
-  notifyWebhook("emergency", body);
+  if (WiFi.status() == WL_CONNECTED) notifyWebhook("emergency", body);   // offline SMS is handled by smsTask
 }
 
 static void notifyGeoWebhook(const GeoEvent& ev) {
@@ -1540,7 +1900,7 @@ static void notifyGeoWebhook(const GeoEvent& ev) {
   doc["lng"]        = ev.lng;
   String body;
   serializeJson(doc, body);
-  notifyWebhook("geofence", body);
+  if (WiFi.status() == WL_CONNECTED) notifyWebhook("geofence", body);    // offline SMS is handled by smsTask
 }
 
 static bool fetchGeofences() {
@@ -1789,6 +2149,8 @@ static void startNormalOperation() {
   gpsNextSession = now;         // first GPS session right away
 
   xTaskCreatePinnedToCore(netTask, "net", 16384, nullptr, 1, &netTaskHandle, 0);
+  smsGeoQueue = xQueueCreate(GEO_SMS_QUEUE_LEN, sizeof(SmsGeoJob));
+  xTaskCreatePinnedToCore(smsTask, "sms", 8192, nullptr, 1, &smsTaskHandle, 0);
   normalOperation = true;
 
   LOG("\n=== Guardian %s started ===\n", FW_VERSION);
@@ -1813,6 +2175,10 @@ void setup() {
 
   gpsSerial.setRxBufferSize(512);
   gpsSerial.begin(9600, SERIAL_8N1, PIN_GPS_RX, PIN_GPS_TX);
+
+  simSerial.setRxBufferSize(1024);   // the phonebook dump is a few KB
+  simSerial.begin(9600, SERIAL_8N1, PIN_SIM_RX, PIN_SIM_TX);
+  // The modem is initialised by smsTask (it waits for boot / registration itself).
 
   Wire.begin(PIN_SDA, PIN_SCL);
   Wire.setClock(400000);

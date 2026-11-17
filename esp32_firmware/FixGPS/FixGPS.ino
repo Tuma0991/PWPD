@@ -83,10 +83,12 @@
 // ── Pins ────────────────────────────────────────────────────────────────────
 constexpr uint8_t PIN_GPS_RX = 5;      // GPS TX -> ESP32 RX
 constexpr uint8_t PIN_GPS_TX = 6;      // GPS RX <- ESP32 TX (used for UBX commands)
-constexpr uint8_t PIN_SOS    = 4;
+constexpr uint8_t PIN_SOS    = 7;
 constexpr uint8_t PIN_LED    = 3;
-constexpr uint8_t PIN_SDA    = 9;
-constexpr uint8_t PIN_SCL    = 8;
+constexpr uint8_t PIN_SDA    = 11;
+constexpr uint8_t PIN_SCL    = 10;
+constexpr uint8_t PIN_SIM_RX = 13;   // SIM800L TX -> ESP32 RX
+constexpr uint8_t PIN_SIM_TX = 12;   // SIM800L RX <- ESP32 TX
 
 // ── CPU frequency (MHz) ─────────────────────────────────────────────────────
 constexpr uint32_t CPU_MHZ_IDLE = 80;  // normal running
@@ -251,6 +253,7 @@ struct WifiNetwork { char ssid[33]; char pass[65]; };
 TinyGPSPlus    gps;
 MPU6050        mpu;
 HardwareSerial gpsSerial(2);
+HardwareSerial simSerial(1);   // SIM800L on UART1
 Preferences    prefs;
 WiFiMulti      wifiMulti;
 WiFiClientSecure netClient;
@@ -486,7 +489,10 @@ static void ledAck(uint32_t now) { ledAckUntil = now + 900; }
 // ═══════════════════════════════════════════════════════════════════════════
 
 static void persistNetworks() {
-  prefs.begin(NVS_NAMESPACE, false);
+  if (!prefs.begin(NVS_NAMESPACE, false)) {
+    LOG("[CONFIG] ERROR: NVS open failed on save (check partition scheme / erase flash)\n");
+    return;
+  }
   prefs.putUChar(NVS_KEY_NET_COUNT, (uint8_t)netCount);
   char key[8];
   for (int i = 0; i < MAX_WIFI_NETS; i++) {
@@ -499,7 +505,9 @@ static void persistNetworks() {
 }
 
 static void loadConfig() {
-  prefs.begin(NVS_NAMESPACE, false);
+  if (!prefs.begin(NVS_NAMESPACE, false)) {
+    LOG("[CONFIG] ERROR: NVS open failed on load (check partition scheme / erase flash)\n");
+  }
 
   deviceId = prefs.getString(NVS_KEY_DEVICE_ID, "");
   // Regenerate if missing, or if it was saved from a degenerate all-zero MAC.
@@ -1532,6 +1540,44 @@ static void notifyWebhook(const char* kind, const String& body) {
 #endif
 }
 
+// ── Direct SIM800L SMS (offline fallback) ────────────────────────────────────
+// Sends an SMS over the SIM800L on UART1. Used when WiFi is down so the device
+// can still alert its emergency contacts, which are stored on the SIM card.
+
+static void sendSmsDirect(const char* phone, const String& body) {
+  simSerial.println("AT+CMGF=1");            // text mode
+  delay(300);
+  simSerial.print("AT+CMGS=\"");
+  simSerial.print(phone);
+  simSerial.println("\"");
+  delay(300);
+  simSerial.print(body);
+  simSerial.write(0x1A);                     // Ctrl+Z = send
+  delay(5000);
+}
+
+static void sendSmsToSimContacts(const String& body) {
+  simSerial.println("AT+CPBS=\"SM\"");       // select SIM phonebook storage
+  delay(300);
+  simSerial.println("AT+CPBR=1,50");         // read entries 1..50
+  delay(600);
+  unsigned long t = millis() + 3000;
+  while (millis() < t) {
+    if (!simSerial.available()) continue;
+    String line = simSerial.readStringUntil('\n');
+    line.trim();
+    if (line.startsWith("+CPBR:")) {
+      int q1 = line.indexOf('"');
+      int q2 = line.indexOf('"', q1 + 1);
+      if (q1 >= 0 && q2 > q1) {
+        String num = line.substring(q1 + 1, q2);
+        sendSmsDirect(num.c_str(), body);
+      }
+    }
+    if (line == "OK" || line == "ERROR") break;
+  }
+}
+
 static void notifyEmergencyWebhook() {
   GpsFix fix = getFix();
   char reason[sizeof(alertReason)];
@@ -1552,7 +1598,11 @@ static void notifyEmergencyWebhook() {
   }
   String body;
   serializeJson(doc, body);
-  notifyWebhook("emergency", body);
+  if (WiFi.status() == WL_CONNECTED) {
+    notifyWebhook("emergency", body);
+  } else {
+    sendSmsToSimContacts("[URGENT] " + deviceId + ": " + String(reason));
+  }
 }
 
 static void notifyGeoWebhook(const GeoEvent& ev) {
@@ -1566,7 +1616,11 @@ static void notifyGeoWebhook(const GeoEvent& ev) {
   doc["lng"]        = ev.lng;
   String body;
   serializeJson(doc, body);
-  notifyWebhook("geofence", body);
+  if (WiFi.status() == WL_CONNECTED) {
+    notifyWebhook("geofence", body);
+  } else if (!ev.entered) {
+    sendSmsToSimContacts("[Guardian Alert] " + deviceId + " has left geofence zone \"" + String(ev.name) + "\".");
+  }
 }
 
 static bool fetchGeofences() {
@@ -1841,6 +1895,9 @@ void setup() {
   gpsSerial.setRxBufferSize(512);
   gpsSerial.begin(9600, SERIAL_8N1, PIN_GPS_RX, PIN_GPS_TX);
 #endif
+
+  simSerial.begin(9600, SERIAL_8N1, PIN_SIM_RX, PIN_SIM_TX);
+  delay(3000);   // let the SIM800L boot and register
 
   Wire.begin(PIN_SDA, PIN_SCL);
   Wire.setClock(400000);
