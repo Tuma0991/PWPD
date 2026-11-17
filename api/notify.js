@@ -84,26 +84,35 @@ async function sendSms(phone, _carrier, body) {
     return false;
   }
 
-  try {
-    const res = await fetch(
-      `https://api.textbee.dev/api/v1/gateway/devices/${deviceId}/send-sms`,
-      {
+  const url = `https://api.textbee.dev/api/v1/gateway/devices/${deviceId}/send-sms`;
+  const payload = JSON.stringify({ recipients: ["+" + digits], message: body });
+
+  // "fetch failed" is a network-level error (connection dropped / timed out),
+  // not a rejection by TextBee. Retry transient failures a couple of times.
+  const MAX_ATTEMPTS = 3;
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    try {
+      const res = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-api-key": apiKey },
-        body: JSON.stringify({ recipients: ["+" + digits], message: body }),
-      },
-    );
-    const raw = await res.text();
-    if (res.ok) {
-      console.log(`SMS queued to +${digits} (TextBee)`);
-      return true;
+        body: payload,
+        signal: AbortSignal.timeout(8000),
+      });
+      const raw = await res.text();
+      if (res.ok) {
+        console.log(`SMS queued to +${digits} (TextBee, attempt ${attempt})`);
+        return true;
+      }
+      console.error(`TextBee failed for +${digits}: HTTP ${res.status} — ${raw}`);
+      // Only 429 and 5xx are worth retrying; 400/401 need a config fix.
+      if (res.status !== 429 && res.status < 500) return false;
+    } catch (err) {
+      const cause = err.cause ? ` (${err.cause.code || err.cause.message})` : "";
+      console.error(`TextBee attempt ${attempt} failed for +${digits}: ${err.message}${cause}`);
     }
-    console.error(`TextBee failed for +${digits}: HTTP ${res.status} — ${raw}`);
-    return false;
-  } catch (err) {
-    console.error(`TextBee failed for +${digits}:`, err.message);
-    return false;
+    if (attempt < MAX_ATTEMPTS) await new Promise((r) => setTimeout(r, 1000 * attempt));
   }
+  return false;
 }
 
 async function getEmergencyContacts(deviceId) {
